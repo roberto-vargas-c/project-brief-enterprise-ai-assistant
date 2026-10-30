@@ -101,6 +101,7 @@ def build_index(documents: list[Document], index_dir: Path | None = None,
         "model": {"openai": config.OPENAI_EMBEDDING_MODEL, "huggingface": config.HF_EMBEDDING_MODEL}.get(provider, "tfidf"),
         "chunks": len(documents),
         "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "index_version": config.INDEX_VERSION,
     }, indent=2))
     return store
 

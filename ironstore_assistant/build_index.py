@@ -5,6 +5,7 @@
 """
 
 import argparse
+import json
 
 from . import config
 from .index import build_index
@@ -26,8 +27,11 @@ def build_all(provider: str = config.EMBEDDINGS_PROVIDER) -> None:
 
 
 def ensure_index() -> None:
-    """Build everything on first run (used by the deployed app and the notebooks)."""
-    if not (config.INDEX_DIR / "manifest.json").exists() or not config.PRODUCTS_CSV.exists():
+    """Build everything on first run, or when the index was built by an older version of the
+    ingestion code (used by the deployed app and the notebooks)."""
+    manifest = config.INDEX_DIR / "manifest.json"
+    version = json.loads(manifest.read_text()).get("index_version", 1) if manifest.exists() else None
+    if version != config.INDEX_VERSION or not config.PRODUCTS_CSV.exists():
         build_all()
 
 

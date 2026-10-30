@@ -20,6 +20,9 @@ DATA_DIR = Path(os.getenv("IRONSTORE_DATA_DIR", ROOT_DIR / "data"))
 EXTRACTED_DIR = DATA_DIR / "raw"
 INDEX_DIR = DATA_DIR / "faiss_index"
 PRODUCTS_CSV = DATA_DIR / "products.csv"
+# Bump when ingestion/chunking changes, so an existing index (e.g. on a deployed app) is rebuilt.
+# v2: chunks span page breaks.
+INDEX_VERSION = 2
 QUALITY_REPORT = DATA_DIR / "data_quality_report.md"
 
 # LLM. The course notebooks use OpenAI chat models through langchain_openai.ChatOpenAI.
@@ -38,5 +41,5 @@ CHUNK_SIZE = int(os.getenv("IRONSTORE_CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("IRONSTORE_CHUNK_OVERLAP", "150"))
 
 # Retrieval
-TOP_K = int(os.getenv("IRONSTORE_TOP_K", "6"))
+TOP_K = int(os.getenv("IRONSTORE_TOP_K", "8"))
 FETCH_K = int(os.getenv("IRONSTORE_FETCH_K", "25"))

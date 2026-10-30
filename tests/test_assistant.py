@@ -120,3 +120,31 @@ def test_agent_lookup_by_name_skips_outdated(store, corpus):
     out = tools["lookup_product"].invoke({"sku_or_name": "Nordholm Lysa"})
     assert "Nordholm Lysa 3-Seater Sofa" in out and collected[0].metadata["page"] == 1
     assert "Remote Work Policy" in tools["list_documents"].invoke({"area": "HR policies"})
+
+
+def test_return_window_is_found_by_hybrid_search(store):
+    # The answer ("within 30 calendar days of delivery") runs over the page 2 -> 3 break
+    r = Retriever(store)
+    docs = r.search(["What is the return window for customers?"])
+    hit = [d for d in docs if "30 calendar days of\ndelivery" in d.page_content]
+    assert hit and hit[0].metadata["page"] == 2 and hit[0].metadata["page_end"] == 3
+
+
+def test_search_trace_and_variety_cap(store):
+    from ironstore_assistant.rag import RetrievalTrace
+
+    trace = RetrievalTrace()
+    docs = Retriever(store).search(["remote work policy hybrid office days core hours equipment"], trace=trace)
+    assert {h.method for h in trace.hits} == {"semantic", "keyword"}
+    assert trace.selected == [d.metadata["chunk_id"] for d in docs]
+    assert sum(d.metadata["source"] == "IronStore_Remote_Work_Policy.pdf" for d in docs) <= 3
+    assert trace.dropped_for_variety
+
+
+def test_on_step_reports_every_stage(store):
+    llm = FakeLLM(text="annual leave request", structured=StructuredAnswer(
+        answer="Use PeopleHub [1].", citations=[1], confidence="high", answerable=True))
+    steps = []
+    resp = Assistant(store, llm).ask("How do I request time off?", on_step=lambda name, data: steps.append(name))
+    assert steps == ["condense", "expand", "retrieve", "generate", "answer", "validate"]
+    assert resp.trace is not None and resp.trace.queries[0] == "How do I request time off?"

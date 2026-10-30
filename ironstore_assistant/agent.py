@@ -13,6 +13,8 @@ tool-calling notebook, so every step is visible and easy to debug.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
@@ -95,8 +97,10 @@ class AgentAssistant:
         self.last_trace: list[str] = []
 
     def ask(self, question: str, history: list[tuple[str, str]] | None = None,
-            include_outdated: bool | None = None, area: str | None = None) -> AssistantResponse:
+            include_outdated: bool | None = None, area: str | None = None,
+            on_step: Callable[[str, dict], None] | None = None) -> AssistantResponse:
         self.last_trace = []
+        step = on_step or (lambda name, data: None)
 
         def gather(standalone: str, msgs: list[BaseMessage]) -> list[Document]:
             collected: list[Document] = []
@@ -114,11 +118,13 @@ class AgentAssistant:
                     self.last_trace.append(f"{call['name']}({call['args']})")
                     fn = by_name.get(call["name"])
                     result = fn.invoke(call["args"]) if fn else f"Unknown tool {call['name']}"
+                    step("tool", {"name": call["name"], "args": call["args"], "result": str(result)})
                     messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
             if not collected:  # the model answered without tools: fall back to plain retrieval
                 collected = self.assistant.retriever.search([standalone], include_outdated=old)
             return collected[:10]
 
-        resp = self.assistant.ask(question, history, include_outdated=include_outdated, area=area, retrieve=gather)
+        resp = self.assistant.ask(question, history, include_outdated=include_outdated, area=area, retrieve=gather,
+                                  on_step=on_step)
         resp.queries = self.last_trace or resp.queries
         return resp

@@ -58,6 +58,7 @@ All choices come from what the course covers (`demos_ai_engineering_sept2026`):
 | Trustworthy answers | **Pydantic structured output** | The model must return `answer`, `citations`, `confidence`, `answerable`, so citations can be checked in code instead of trusted. | `L_LLM_APIs/6` |
 | Follow-up questions | **Conversation memory** (window of the last 6 turns + question condensing) | "And for contractors?" works. | `N_LangChain/04`, `L_LLM_APIs/4` |
 | Better recall | **Multi-query retrieval** with rank fusion | Employees say "time off", the policy says "annual leave". | `N_LangChain/11` |
+| Exact words | **Hybrid search**: TF-IDF keyword search next to FAISS | Embeddings can rank "30 calendar days" or a product name too low; keywords catch them. | `H_NLP` |
 | Exact lookups | **Tool-calling agent** | Embeddings are bad at exact SKUs and prices; a `lookup_product` tool reads the parsed product table. | `L_LLM_APIs/5`, `N_LangChain/05`, `10` |
 | Safety | **Prompt-injection rules** | Documents and questions are treated as data, never as instructions. | `L_LLM_APIs/8` |
 | PDF text | **pypdf** | Keeps page numbers for citations. | — |
@@ -69,10 +70,10 @@ All choices come from what the course covers (`demos_ai_engineering_sept2026`):
 flowchart LR
     Z[documents.zip] -->|skip __MACOSX, .DS_Store| P[83 PDFs]
     P --> M[normalise metadata<br/>flag shared IDs, outdated docs]
-    M --> C1[policies: page-aware chunks]
+    M --> C1[policies: chunks that span page breaks]
     M --> C2[catalogs: 1 chunk per product<br/>+ products.csv]
     C1 & C2 --> E[embeddings] --> F[(FAISS)]
-    Q[question + history] --> CQ[condense] --> MQ[multi-query] --> R[retrieve<br/>skip outdated, boost SKUs]
+    Q[question + history] --> CQ[condense] --> MQ[multi-query] --> R[hybrid retrieve: FAISS + keywords<br/>rank fusion, max 3 per doc<br/>skip outdated, boost SKUs]
     F --> R --> G[LLM structured answer] --> V[validate citations<br/>set confidence, warnings] --> A[answer + sources]
 ```
 
@@ -95,6 +96,7 @@ ingestion step.
 | **SKUs reused by different products** (`IS-BED-001`…`004` in *Bedding & Linens* and *Home Essentials*) | Reported, and `lookup_product` returns both with a warning instead of picking one. |
 | A product printed twice in a row (Seasonal & Holiday Decor), products with missing price or availability | Merged / reported in the data-quality report. |
 | Catalog notes, legends and summary tables between products | Indexed separately as "catalog notes", so they don't pollute product chunks. |
+| Sentences that run over a page break (e.g. the return window: "30 calendar days of" / "delivery") | Policies are chunked as a whole and each chunk records the pages it spans, so citations read *p. 2–3*. |
 
 ## Bonus features
 
@@ -106,7 +108,24 @@ ingestion step.
 - **Data-quality report** (`python -m ironstore_assistant.ingest`).
 - **Evaluation set** of 20 cases including every trap (`python -m ironstore_assistant.evaluate`).
 - **Department filter** and **include outdated** switch in the UI.
-- **Offline mode** (TF-IDF embeddings) and **21 offline tests** with a fake LLM.
+- **🎬 Show my work**: an animated, step-by-step view of every answer (see below).
+- **Offline mode** (TF-IDF embeddings) and **25 offline tests** with a fake LLM.
+
+## 🎬 Show my work
+
+With *Animate how I find the answer* on (sidebar), each answer is built live in front of you:
+
+1. 🧠 **Understanding**: a follow-up is rewritten into a standalone question (strikethrough → new question).
+2. ✍️ **Rewording**: the multi-query versions pop in one by one.
+3. 🔎 **Searching**: top hits from 🧭 meaning (FAISS) and 🔤 keywords (TF-IDF) side by side, with animated score bars.
+4. 🏆 **Rank fusion**: the leaderboard of merged results; chunks skipped for variety are greyed out.
+5. 🗺️ **Knowledge map**: every chunk is a dot (PCA of its embedding). The ⭐ question drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**.
+6. 📚 **Passages**: the numbered cards the model reads, each tagged with the search that found it.
+7. ✅ **Citations checked**: which passages were actually cited, then the answer types itself out.
+
+![Show my work](docs/images/show_my_work.png)
+
+*Screenshot from a local run with offline embeddings and a scripted answer; the retrieval steps are real.*
 
 ## Evaluation
 
@@ -119,8 +138,9 @@ python -m ironstore_assistant.evaluate --agent            # full answers, agent 
 The full run checks, per case: correct `answerable` flag, expected documents cited, key facts in the
 answer, no leaked system prompt, and an outdated warning when the 2021 catalog is used.
 
-With the **offline TF-IDF** embeddings the retriever already gets **93% recall@6** and an **80% top-1 hit**
-on the 15 cases with an expected source ([`docs/retrieval_eval_tfidf.md`](docs/retrieval_eval_tfidf.md)).
+With the **offline TF-IDF** embeddings plus keyword search, the retriever gets **100% recall@8** and a
+**93% top-1 hit** on the 15 cases with an expected source (it was 93% / 80% before hybrid search and
+page-spanning chunks) ([`docs/retrieval_eval_tfidf.md`](docs/retrieval_eval_tfidf.md)).
 OpenAI embeddings should do better on paraphrased questions; run the evaluation after building the index
 with your key to get the real numbers.
 
@@ -145,6 +165,7 @@ ironstore_assistant/
   evaluate.py      evaluation set and scorer (bonus)
   fake_llm.py      scripted stand-in LLM for tests and key-less notebooks
 app.py             Streamlit chat UI
+pipeline_view.py   animated "show my work" view and knowledge map
 cli.py             terminal chat
 tests/             offline tests
 notebooks/         teaching notebooks (course concepts applied here)
