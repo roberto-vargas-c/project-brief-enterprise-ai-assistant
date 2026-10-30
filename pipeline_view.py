@@ -9,9 +9,11 @@ which passages went to the model, and which ones it actually cited.
 from __future__ import annotations
 
 import html
-import math
+import json
+import re
 import time
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import streamlit as st
@@ -67,6 +69,10 @@ def _color(d) -> str:
 
 
 # -- knowledge map ---------------------------------------------------------------------------
+MAP_TEMPLATE = Path(__file__).parent / "assets" / "knowledge_map.html"
+MAP_AREAS = list(AREA_COLORS) + ["Other"]
+
+
 @st.cache_resource(show_spinner="Drawing the knowledge map…")
 def _map_data(_retriever: Retriever, retriever_id: int, index_size: int):
     """2D PCA projection of every chunk vector stored in FAISS (computed once)."""
@@ -80,105 +86,61 @@ def _map_data(_retriever: Retriever, retriever_id: int, index_size: int):
     chunk_xy = {}
     for pos, doc_id in store.index_to_docstore_id.items():
         d = store.docstore.search(doc_id)
-        chunk_xy[d.metadata["chunk_id"]] = (xy[pos], d.metadata.get("area", ""))
+        area = d.metadata.get("area", "")
+        chunk_xy[d.metadata["chunk_id"]] = (xy[pos], MAP_AREAS.index(area) if area in AREA_COLORS else
+                                            len(MAP_AREAS) - 1, _doc_label(d))
     return pca, lo, hi, chunk_xy
 
 
+def _unwrap(text: str) -> str:
+    """Join lines that the PDF broke in the middle of a sentence."""
+    return re.sub(r"(?<![.:;!?])\n(?=[a-z(])", " ", text)
+
+
 def knowledge_map(retriever: Retriever, question: str, selected: list[int], cited: set[int] | None = None,
-                  height: int = 400) -> None:
-    """Animated SVG: all chunks appear, the question drops in, the map zooms on it, and lines
-    shoot out to the passages that were picked (green when the answer cited them)."""
+                  height: int = 420) -> None:
+    """Interactive map of every chunk (assets/knowledge_map.html). It opens with an animation: the
+    chunks appear, the question drops in, the map zooms on it and lines shoot out to the picked
+    passages (green when the answer cited them). Then the user can zoom, pan, hover, click and go
+    full screen."""
     pca, lo, hi, chunk_xy = _map_data(retriever, id(retriever), retriever.store.index.ntotal)
     W, H, pad = 1000, height - 20, 24
 
     def proj(v):
         x = pad + (np.clip(v[0], lo[0], hi[0]) - lo[0]) / (hi[0] - lo[0] + 1e-9) * (W - 2 * pad)
         y = pad + (1 - (np.clip(v[1], lo[1], hi[1]) - lo[1]) / (hi[1] - lo[1] + 1e-9)) * (H - 2 * pad)
-        return float(x), float(y)
+        return round(float(x), 1), round(float(y), 1)
 
+    ids = list(chunk_xy)
+    pos = {cid: i for i, cid in enumerate(ids)}
+    points = [proj(v) for v, _, _ in chunk_xy.values()]
     qx, qy = proj(pca.transform(np.array([retriever.store.embeddings.embed_query(question)]))[0])
-    picked = [(rank, cid, *proj(chunk_xy[cid][0])) for rank, cid in enumerate(selected, start=1) if cid in chunk_xy]
-
-    # Zoom on the area around the question and its passages
-    xs, ys = [qx] + [p[2] for p in picked], [qy] + [p[3] for p in picked]
-    bw, bh = max(xs) - min(xs) + 80, max(ys) - min(ys) + 80
-    zoom = float(np.clip(min(W / bw, H / bh), 1, 3.5))
-    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
-    transform = f"translate({W / 2:.1f}px,{H / 2:.1f}px) scale({zoom:.2f}) translate({-cx:.1f}px,{-cy:.1f}px)"
-
-    dots = []
-    for i, (v, area) in enumerate(chunk_xy.values()):
-        x, y = proj(v)
-        dots.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.3" fill="{AREA_COLORS.get(area, "#94a3b8")}" '
-                    f'class="dot" style="animation-delay:{(i % 40) * 0.012:.2f}s"/>')
-    links, hits = [], []
-    r = 9 / zoom  # keep the markers the same size on screen after zooming
-    for rank, cid, x, y in picked:
+    hits = []
+    for rank, cid in enumerate(selected, start=1):
+        if cid not in pos:
+            continue
         d = retriever.docs[cid]
         is_cited = bool(cited) and cid in cited
-        color = "#34d399" if is_cited else _color(d)
-        ring = ("#ffffff", 2.6) if is_cited else ("#070b18", 2)
-        length = math.hypot(x - qx, y - qy) + 1
-        delay = 2.9 + rank * 0.2
-        links.append(f'<line x1="{qx:.1f}" y1="{qy:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="{color}" '
-                     f'stroke-width="{1.6 / zoom:.2f}" stroke-dasharray="{length:.1f}" stroke-dashoffset="{length:.1f}" '
-                     f'class="link" style="animation-delay:{delay:.2f}s"/>')
-        hits.append(f'<g class="hit" style="animation-delay:{delay + .35:.2f}s"><title>[{rank}] '
-                    f'{html.escape(_doc_label(d))}</title><circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.2f}" fill="{color}" '
-                    f'stroke="{ring[0]}" stroke-width="{ring[1] / zoom:.2f}"/><text x="{x:.1f}" y="{y + r * .38:.1f}" '
-                    f'text-anchor="middle" font-size="{10 / zoom:.2f}" font-weight="700" fill="#070b18">{rank}</text></g>')
-    legend = "".join(f'<span><i style="background:{c}"></i>{a}</span>' for a, c in AREA_COLORS.items())
-    q_r = 11 / zoom
-    _embed_html(f"""
-<svg viewBox="0 0 {W} {H}" width="100%"
-     style="overflow:hidden;border-radius:14px;border:1px solid rgba(139,151,181,.18);
-            background:radial-gradient(ellipse at 50% 40%, #151f3d, #070b18 75%)">
-  <defs>
-    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-      <path d="M32 0H0V32" fill="none" stroke="rgba(139,151,181,.10)" stroke-width="1"/></pattern>
-    <radialGradient id="halo"><stop offset="0" stop-color="#fbbf24" stop-opacity=".55"/>
-      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/></radialGradient>
-  </defs>
-  <rect x="-{W}" y="-{H}" width="{3 * W}" height="{3 * H}" fill="url(#grid)"/>
-  <style>
-    .halo {{ transform-box: fill-box; transform-origin: center; opacity: 0;
-             animation: halo 2.4s ease-out 1.4s infinite; }}
-    @keyframes halo {{ 0% {{ opacity: .9; transform: scale(.3); }} 100% {{ opacity: 0; transform: scale(1.6); }} }}
-    .dot {{ opacity: 0; animation: pop .5s ease forwards; }}
-    .world {{ animation: zoom 1.2s cubic-bezier(.6,0,.2,1) 1.7s forwards; }}
-    .link {{ animation: draw .7s ease forwards; opacity: .85; }}
-    .hit {{ opacity: 0; transform-box: fill-box; transform-origin: center;
-            animation: hit .5s cubic-bezier(.3,1.6,.5,1) forwards; }}
-    .star {{ transform-box: fill-box; transform-origin: center;
-             animation: land .9s cubic-bezier(.3,1.4,.5,1) .6s both, pulse 1.8s ease-in-out 3.2s infinite; }}
-    @keyframes pop {{ to {{ opacity: .7; }} }}
-    @keyframes zoom {{ to {{ transform: {transform}; }} }}
-    @keyframes draw {{ to {{ stroke-dashoffset: 0; }} }}
-    @keyframes hit {{ from {{ opacity: 0; transform: scale(.2); }} to {{ opacity: 1; transform: scale(1); }} }}
-    @keyframes land {{ from {{ transform: translateY(-{qy + 40:.0f}px) scale(3); opacity: 0; }}
-                       to {{ transform: none; opacity: 1; }} }}
-    @keyframes pulse {{ 50% {{ transform: scale(1.3); }} }}
-  </style>
-  <g class="world">
-    {''.join(dots)}
-    {''.join(links)}
-    {''.join(hits)}
-    <circle class="halo" cx="{qx:.1f}" cy="{qy:.1f}" r="{40 / zoom:.1f}" fill="url(#halo)"/>
-    <g class="star"><circle cx="{qx:.1f}" cy="{qy:.1f}" r="{q_r:.2f}" fill="#fbbf24" stroke="#fff"
-       stroke-width="{2.4 / zoom:.2f}"/><text x="{qx:.1f}" y="{qy + q_r * .36:.1f}" text-anchor="middle"
-       font-size="{q_r:.2f}" font-weight="800" fill="#070b18">Q</text></g>
-  </g>
-</svg>
-<div class="legend">{legend}<span><i style="background:#fbbf24"></i>your question (Q)</span><span><i style="background:#34d399"></i>cited</span></div>
-<style>
-  body {{ margin: 0; font-family: Inter, "Source Sans Pro", sans-serif; color: #8b97b5; background: transparent; }}
-  .legend {{ display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: 12px; margin-top: 8px; }}
-  .legend i {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }}
-</style>""", height=height + 10)
+        x, y = points[pos[cid]]
+        hits.append({"rank": rank, "i": pos[cid], "x": x, "y": y, "cited": is_cited,
+                     "color": "#34d399" if is_cited else _color(d), "label": _doc_label(d),
+                     "area": d.metadata.get("area", ""), "snippet": _unwrap(d.page_content.split("\n", 1)[-1])[:700]})
+
+    # The opening animation zooms on the question and its passages
+    xs, ys = [qx] + [h["x"] for h in hits], [qy] + [h["y"] for h in hits]
+    bw, bh = max(xs) - min(xs) + 80, max(ys) - min(ys) + 80
+    data = {"W": W, "H": H, "x": [p[0] for p in points], "y": [p[1] for p in points],
+            "a": [a for _, a, _ in chunk_xy.values()], "labels": [lab for _, _, lab in chunk_xy.values()],
+            "areas": MAP_AREAS, "colors": list(AREA_COLORS.values()) + ["#94a3b8"], "q": [qx, qy],
+            "zoom": float(np.clip(min(W / bw, H / bh), 1, 3.5)),
+            "center": [(max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2], "hits": hits, "answered": cited is not None}
+    page = (MAP_TEMPLATE.read_text().replace("__W__", str(W)).replace("__H__", str(H))
+            .replace("__DATA__", json.dumps(data).replace("</", "<\\/")))
+    _embed_html(page, height=height + 30)
 
 
 def _embed_html(content: str, height: int) -> None:
-    """The SVG is built from our own index (titles are escaped), so an iframe is safe here.
+    """The map is built from our own index (all text is escaped in the page), so an iframe is safe here.
     st.iframe replaces st.components.v1.html in recent Streamlit versions."""
     if hasattr(st, "iframe"):
         st.iframe(content, height=height)
@@ -320,7 +282,8 @@ class PipelineView:
         if self.show_map and self.trace.selected:
             with st.status("Where your question lands", expanded=True) as s:
                 st.caption("Every dot is a chunk, placed by its embedding (PCA to 2D). Close dots talk about "
-                           "similar things. The yellow Q is your question; the numbers are the passages I picked.")
+                           "similar things. The yellow Q is your question; the numbers are the passages I picked. "
+                           "When the animation ends you can zoom, drag, hover, click and go full screen.")
                 self._map_slot = st.empty()
                 with self._map_slot.container():
                     knowledge_map(self.retriever, self.question, self.trace.selected)
