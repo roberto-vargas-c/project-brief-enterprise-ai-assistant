@@ -2,13 +2,14 @@
 
     streamlit run app.py
 
-On Streamlit Community Cloud, put OPENAI_API_KEY (and optionally APP_PASSWORD) in the app's
-Secrets. The index is built automatically on the first visit.
+On Streamlit Community Cloud, put OPENAI_API_KEY in the app's Secrets. The index is built
+automatically on the first visit.
 """
 
-import hmac
+import hashlib
 import json
 import os
+from pathlib import Path
 
 import streamlit as st
 
@@ -28,22 +29,6 @@ from ironstore_assistant.rag import build_assistant, page_label  # noqa: E402
 from pipeline_view import PipelineView, passage_cards, typewriter  # noqa: E402
 
 
-def check_password() -> None:
-    """Simple shared password, so a public deployment doesn't spend your OpenAI credits for strangers."""
-    expected = os.getenv("APP_PASSWORD")
-    if not expected or st.session_state.get("authenticated"):
-        return
-    st.title("🤖 IronStore Assistant")
-    pwd = st.text_input("Password", type="password")
-    if pwd and hmac.compare_digest(pwd, expected):
-        st.session_state.authenticated = True
-        st.rerun()
-    elif pwd:
-        st.error("Wrong password.")
-    st.stop()
-
-
-check_password()
 if not os.getenv("OPENAI_API_KEY"):
     st.error("OPENAI_API_KEY is not set. Add it to `.env` locally, or to the app's **Secrets** on Streamlit Cloud.")
     st.stop()
@@ -57,8 +42,18 @@ EXAMPLES = [
 ]
 
 
+def code_version() -> str:
+    """Hash of the assistant's source code. Streamlit keeps cached objects across a redeploy when
+    the cached function itself is unchanged, so this key makes a new deploy build a fresh assistant
+    (and rebuild the index if needed) instead of reusing one made by the old code."""
+    h = hashlib.sha256()
+    for f in sorted(Path(__file__).parent.joinpath("ironstore_assistant").glob("*.py")):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
 @st.cache_resource(show_spinner="Loading the knowledge base (the first visit builds the index, about 1-2 minutes)…")
-def get_assistant(multi_query: bool):
+def get_assistant(multi_query: bool, version: str):
     return build_assistant(multi_query=multi_query)
 
 
@@ -92,7 +87,7 @@ with st.sidebar:
 speed = {"Fast": 0.35, "Normal": 1.0, "Slow": 2.0}[speed_label] if show_work else 0.0
 
 try:
-    rag = get_assistant(multi_query)
+    rag = get_assistant(multi_query, code_version())
 except FileNotFoundError as e:
     st.error(str(e))
     st.stop()

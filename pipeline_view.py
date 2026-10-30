@@ -67,7 +67,7 @@ def _color(d) -> str:
 
 # -- knowledge map ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Drawing the knowledge map…")
-def _map_data(_retriever: Retriever, index_size: int):
+def _map_data(_retriever: Retriever, retriever_id: int, index_size: int):
     """2D PCA projection of every chunk vector stored in FAISS (computed once)."""
     from sklearn.decomposition import PCA
 
@@ -87,7 +87,7 @@ def knowledge_map(retriever: Retriever, question: str, selected: list[int], cite
                   height: int = 400) -> None:
     """Animated SVG: all chunks appear, the question drops in, the map zooms on it, and lines
     shoot out to the passages that were picked (green when the answer cited them)."""
-    pca, lo, hi, chunk_xy = _map_data(retriever, retriever.store.index.ntotal)
+    pca, lo, hi, chunk_xy = _map_data(retriever, id(retriever), retriever.store.index.ntotal)
     W, H, pad = 760, height - 20, 24
 
     def proj(v):
