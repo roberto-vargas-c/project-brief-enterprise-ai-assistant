@@ -132,16 +132,18 @@ and the answer is built on the map **while it happens**:
 6. **Answer**: the cited passages turn green and pulse, and the answer is typed out in the caption bar
    at the bottom, with its confidence and the cited sources (click one to read the passage).
 
-The map fills the whole answer area, from the question down to the chat box, and the answer lives inside
-it, so nothing is repeated below.
+The map opens full screen, covering the whole window, with the chat box floating on top so you can ask the
+next question right away. The answer lives inside the map, so nothing is repeated below. The button at the
+top right (or Esc) docks the map into the chat, where it fills the space between the question and the chat
+box; press it again to go back to full screen. The map sets a class on its own frame (`map-full`) and
+`ui.py` pins that frame over the page.
 
 How it streams: `LiveMap` (`live_view.py`) is the `on_step` callback. It writes each step to a small JSON
 file under `static/live/`, which Streamlit serves (`enableStaticServing`), and the map polls it four times a
 second.
 
 You can explore at any time: drag to rotate, right-drag to move, scroll to zoom, hover any dot for its
-document and page, click a numbered passage to read it, click a department in the legend to hide it, and
-press the full-screen button (top right).
+document and page, click a numbered passage to read it, and click a department in the legend to hide it.
 
 ![Live map while searching](docs/images/live_searching.png)
 

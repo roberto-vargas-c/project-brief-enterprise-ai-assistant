@@ -139,8 +139,9 @@ class MapEvents:
 
 
 def _render(data: dict, height: int | None) -> None:
-    """height=None fills the screen: the map takes its frame's full height, and ui.py sizes the frame
-    (inside a container keyed "livemap") to the space between the question and the chat input."""
+    """height=None is the live map: it opens covering the whole window (ui.py pins its frame, inside a
+    container keyed "livemap", over the page) and its full-screen button docks it into the chat."""
+    data = {**data, "overlay": height is None}
     page = (TEMPLATE.read_text().replace("__HEIGHT__", f"{height}px" if height else "100vh")
             .replace("__DATA__", json.dumps(data).replace("</", "<\\/")))
     # The page is built from our own index and answer, and every text is escaped before it is shown.
@@ -154,7 +155,7 @@ def _render(data: dict, height: int | None) -> None:
 
 class LiveMap:
     """`on_step` callback that streams each pipeline step to the 3D map while the answer is built.
-    The map fills the answer area; the answer and its sources are typed into its caption."""
+    The map covers the whole window; the answer and its sources are typed into its caption."""
 
     def __init__(self, retriever: Retriever, question: str, speed: float = 1.0):
         self.ev = MapEvents(retriever)
