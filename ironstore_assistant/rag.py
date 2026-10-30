@@ -50,6 +50,7 @@ class Source:
     title: str
     source: str  # file name
     page: int
+    page_end: int = 0
     doc_id: str = ""
     status: str = "current"
     last_reviewed: str = ""
@@ -57,7 +58,7 @@ class Source:
 
     def label(self) -> str:
         extra = " — OUTDATED" if self.status == "outdated" else ""
-        return f"{self.title} (p. {self.page}){extra}"
+        return f"{self.title} ({page_label(self.page, self.page_end)}){extra}"
 
 
 @dataclass
@@ -70,13 +71,18 @@ class AssistantResponse:
     queries: list[str] = field(default_factory=list)
     retrieved: list[Document] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    trace: "RetrievalTrace | None" = None
+
+
+def page_label(page: int, page_end: int | None = None) -> str:
+    return f"p. {page}–{page_end}" if page_end and page_end != page else f"p. {page}"
 
 
 def format_context(docs: list[Document]) -> str:
     blocks = []
     for i, d in enumerate(docs, start=1):
         m = d.metadata
-        header = f"[{i}] {m['title']}, page {m['page']}"
+        header = f"[{i}] {m['title']}, {page_label(m['page'], m.get('page_end'))}"
         if m.get("doc_id"):
             header += f" (ID {m['doc_id']}{' — shared with another document' if m.get('id_conflict') else ''})"
         if m.get("last_reviewed"):
@@ -97,45 +103,108 @@ def to_messages(history: list[tuple[str, str]] | None, window: int = 6) -> list[
     return msgs
 
 
+@dataclass
+class Hit:
+    """One chunk found by one search, for the step-by-step view in the app."""
+
+    chunk_id: int
+    query: str
+    method: str  # "semantic" | "keyword" | "sku"
+    rank: int
+    score: float
+
+
+@dataclass
+class RetrievalTrace:
+    queries: list[str] = field(default_factory=list)
+    hits: list[Hit] = field(default_factory=list)
+    fused: list[tuple[int, float]] = field(default_factory=list)  # (chunk_id, RRF score), best first
+    selected: list[int] = field(default_factory=list)  # chunk ids sent to the LLM, in order
+    dropped_for_variety: list[int] = field(default_factory=list)
+    excluded_outdated: bool = True
+
+
 class Retriever:
-    """FAISS search + metadata filters + multi-query + exact SKU boost."""
+    """Hybrid search: FAISS (meaning) + TF-IDF keywords (exact words), merged with
+    reciprocal-rank fusion, with metadata filters, multi-query and an exact SKU boost."""
 
     def __init__(self, store, products: pd.DataFrame | None = None):
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
         self.store = store
         self.products = products if products is not None else pd.DataFrame()
+        self.docs: dict[int, Document] = {d.metadata["chunk_id"]: d for d in store.docstore._dict.values()}
         self._by_sku: dict[str, list[Document]] = {}
-        for doc in store.docstore._dict.values():
+        for doc in self.docs.values():
             if sku := doc.metadata.get("sku"):
                 self._by_sku.setdefault(sku, []).append(doc)
+        # Keyword index (TF-IDF, H_NLP): catches exact terms such as "return", "30 days" or a
+        # product name that semantic search can rank too low.
+        self._ids = list(self.docs)
+        self._vectorizer = TfidfVectorizer(sublinear_tf=True, ngram_range=(1, 2), stop_words="english",
+                                           max_features=150_000)
+        self._matrix = self._vectorizer.fit_transform(self.docs[i].page_content for i in self._ids)
 
     def docs_for_sku(self, sku: str, include_outdated: bool = True) -> list[Document]:
         return [d for d in self._by_sku.get(sku, [])
                 if include_outdated or d.metadata.get("status") != "outdated"]
 
+    def keyword_search(self, query: str, k: int, keep: Callable[[dict], bool]) -> list[tuple[Document, float]]:
+        scores = (self._matrix @ self._vectorizer.transform([query]).T).toarray().ravel()
+        out = []
+        for idx in scores.argsort()[::-1]:
+            if scores[idx] <= 0 or len(out) >= k:
+                break
+            d = self.docs[self._ids[idx]]
+            if keep(d.metadata):
+                out.append((d, float(scores[idx])))
+        return out
+
     def search(self, queries: list[str], k: int = config.TOP_K, include_outdated: bool = False,
-               doc_type: str | None = None, area: str | None = None) -> list[Document]:
+               doc_type: str | None = None, area: str | None = None,
+               trace: RetrievalTrace | None = None, max_per_document: int = 3) -> list[Document]:
+        trace = trace if trace is not None else RetrievalTrace()
+        trace.queries, trace.excluded_outdated = list(queries), not include_outdated
+
         def keep(md: dict) -> bool:
             return ((include_outdated or md.get("status") != "outdated")
                     and (doc_type is None or md.get("doc_type") == doc_type)
                     and (area is None or md.get("area") == area))
 
-        # Reciprocal-rank fusion across the queries (what MultiQueryRetriever does, plus ranking)
+        # Every (query, method) pair gives a ranking; reciprocal-rank fusion merges them all,
+        # so a chunk found by several queries and by both methods rises to the top.
         scores: dict[int, float] = {}
-        docs: dict[int, Document] = {}
         for q in queries:
-            hits = self.store.similarity_search_with_score(q, k=k * 2, fetch_k=config.FETCH_K * 4, filter=keep)
-            for rank, (d, _) in enumerate(hits):
-                cid = d.metadata["chunk_id"]
-                docs[cid] = d
-                scores[cid] = scores.get(cid, 0.0) + 1.0 / (60 + rank)
-        ranked = sorted(scores, key=scores.get, reverse=True)
-        result = [docs[c] for c in ranked[:k]]
+            semantic = self.store.similarity_search_with_score(q, k=k * 2, fetch_k=config.FETCH_K * 4, filter=keep)
+            for method, hits in (("semantic", semantic), ("keyword", self.keyword_search(q, k * 2, keep))):
+                for rank, (d, score) in enumerate(hits):
+                    cid = d.metadata["chunk_id"]
+                    scores[cid] = scores.get(cid, 0.0) + 1.0 / (60 + rank)
+                    trace.hits.append(Hit(cid, q, method, rank + 1, float(score)))
+        trace.fused = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+
+        # Keep some variety: at most `max_per_document` chunks from the same file, so one long
+        # document can't crowd out the one that holds the answer.
+        result: list[Document] = []
+        per_doc: dict[str, int] = {}
+        for cid, _ in trace.fused:
+            d = self.docs[cid]
+            src = d.metadata["source"]
+            if per_doc.get(src, 0) >= max_per_document:
+                trace.dropped_for_variety.append(cid)
+                continue
+            per_doc[src] = per_doc.get(src, 0) + 1
+            result.append(d)
+            if len(result) == k:
+                break
 
         # Exact SKUs typed by the user always make it into the context
         for sku in {s for q in queries for s in SKU_RE.findall(q)}:
             for d in reversed(self.docs_for_sku(sku, include_outdated)):
                 if d not in result:
                     result.insert(0, d)
+                    trace.hits.append(Hit(d.metadata["chunk_id"], sku, "sku", 1, 1.0))
+        trace.selected = [d.metadata["chunk_id"] for d in result]
         return result
 
 
@@ -169,25 +238,43 @@ class Assistant:
     # -- public API --------------------------------------------------------------------
     def ask(self, question: str, history: list[tuple[str, str]] | None = None,
             include_outdated: bool | None = None, area: str | None = None,
-            retrieve: Callable[[str, list[BaseMessage]], list[Document]] | None = None) -> AssistantResponse:
-        """Answer a question. `retrieve` lets the agent supply its own evidence."""
+            retrieve: Callable[[str, list[BaseMessage]], list[Document]] | None = None,
+            on_step: Callable[[str, dict], None] | None = None) -> AssistantResponse:
+        """Answer a question.
+
+        `retrieve` lets the agent supply its own evidence. `on_step(name, data)` is called after
+        each stage (condense, expand, retrieve, generate, answer, validate) so a UI can show the
+        pipeline live.
+        """
+        step = on_step or (lambda name, data: None)
         msgs = to_messages(history)
         standalone = self.condense(question, msgs)
+        step("condense", {"question": question, "standalone": standalone, "history_turns": len(msgs) // 2})
         if include_outdated is None:
             include_outdated = bool(OLD_DATA_RE.search(standalone))
 
         queries = [standalone]
+        trace = RetrievalTrace(queries=queries, excluded_outdated=not include_outdated)
         if retrieve is not None:
             docs = retrieve(standalone, msgs)
+            trace.selected = [d.metadata.get("chunk_id", -1) for d in docs]
         else:
             queries = self.expand(standalone)
-            docs = self.retriever.search(queries, include_outdated=include_outdated, area=area)
+            step("expand", {"queries": queries})
+            docs = self.retriever.search(queries, include_outdated=include_outdated, area=area, trace=trace)
+        step("retrieve", {"trace": trace, "docs": docs})
 
         if not docs:
-            return AssistantResponse(NOT_FOUND, "low", False, standalone_question=standalone, queries=queries)
+            return AssistantResponse(NOT_FOUND, "low", False, standalone_question=standalone, queries=queries,
+                                     trace=trace)
 
+        step("generate", {"context": format_context(docs)})
         out = self.generate(standalone, docs, msgs)
-        return self._finalise(out, docs, standalone, queries)
+        step("answer", {"raw": out})
+        resp = self._finalise(out, docs, standalone, queries)
+        resp.trace = trace
+        step("validate", {"response": resp, "raw": out})
+        return resp
 
     def _finalise(self, out: StructuredAnswer, docs: list[Document], standalone: str,
                   queries: list[str]) -> AssistantResponse:
@@ -201,6 +288,7 @@ class Assistant:
         for n in cited:
             m = docs[n - 1].metadata
             resp.sources.append(Source(number=n, title=m["title"], source=m["source"], page=m["page"],
+                                       page_end=m.get("page_end") or m["page"],
                                        doc_id=m.get("doc_id", ""), status=m.get("status", "current"),
                                        last_reviewed=m.get("last_reviewed", ""),
                                        snippet=docs[n - 1].page_content.split("\n", 1)[-1][:600]))

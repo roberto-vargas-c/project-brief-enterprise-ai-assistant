@@ -24,7 +24,8 @@ except Exception:  # no secrets file when running locally: .env is used instead
 
 from ironstore_assistant import config  # noqa: E402
 from ironstore_assistant.agent import AgentAssistant  # noqa: E402
-from ironstore_assistant.rag import build_assistant  # noqa: E402
+from ironstore_assistant.rag import build_assistant, page_label  # noqa: E402
+from pipeline_view import PipelineView, passage_cards, typewriter  # noqa: E402
 
 
 def check_password() -> None:
@@ -74,12 +75,21 @@ with st.sidebar:
     areas = ["All", "Customer support", "Deliveries", "Finance", "HR policies", "IT", "Legal Terms", "Sales",
              "Product catalog"]
     area = st.selectbox("Department", areas)
+    st.divider()
+    st.subheader("🎬 Show my work")
+    show_work = st.toggle("Animate how I find the answer", value=True)
+    speed_label = st.select_slider("Animation speed", ["Fast", "Normal", "Slow"], value="Normal",
+                                   disabled=not show_work)
+    show_map = st.toggle("Knowledge map", value=True, disabled=not show_work,
+                         help="Plot every chunk on a 2D map and show where your question lands.")
     if st.button("New conversation"):
         st.session_state.messages = []
     st.divider()
     manifest = config.INDEX_DIR / "manifest.json"
     embeddings = json.loads(manifest.read_text())["model"] if manifest.exists() else "no index yet"
     st.caption(f"Model: `{config.CHAT_MODEL}` · Embeddings: `{embeddings}`")
+
+speed = {"Fast": 0.35, "Normal": 1.0, "Slow": 2.0}[speed_label] if show_work else 0.0
 
 try:
     rag = get_assistant(multi_query)
@@ -92,8 +102,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-def render_response(msg: dict) -> None:
-    st.markdown(msg["content"])
+def render_sources(msg: dict) -> None:
     if msg.get("confidence"):
         st.caption(CONFIDENCE_BADGE[msg["confidence"]])
     for w in msg.get("warnings", []):
@@ -102,14 +111,16 @@ def render_response(msg: dict) -> None:
         st.markdown("**Sources**")
         for s in msg["sources"]:
             with st.expander(f"[{s.number}] {s.label()}"):
-                st.caption(f"File: `{s.source}` · page {s.page}"
+                st.caption(f"File: `{s.source}` · {page_label(s.page, s.page_end)}"
                            + (f" · ID {s.doc_id}" if s.doc_id else "")
                            + (f" · last reviewed {s.last_reviewed}" if s.last_reviewed else ""))
                 st.text(s.snippet)
-    if msg.get("trace"):
-        with st.expander("How I searched"):
-            for q in msg["trace"]:
-                st.code(q, language=None)
+    if msg.get("trace") is not None and msg.get("docs"):
+        with st.expander("🔍 How I found this"):
+            trace = msg["trace"]
+            st.markdown("**Searched with:** " + " · ".join(f"`{q}`" for q in trace.queries))
+            st.markdown(passage_cards(msg["docs"], trace, {s.number for s in msg["sources"]}),
+                        unsafe_allow_html=True)
 
 
 st.header("Ask about IronStore policies, procedures and products")
@@ -121,7 +132,9 @@ if not st.session_state.messages:
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        render_response(msg) if msg["role"] == "assistant" else st.markdown(msg["content"])
+        st.markdown(msg["content"])
+        if msg["role"] == "assistant":
+            render_sources(msg)
 
 question = st.chat_input("Ask a question…") or st.session_state.pop("pending", None)
 if question:
@@ -130,10 +143,17 @@ if question:
     with st.chat_message("user"):
         st.markdown(question)
     with st.chat_message("assistant"):
-        with st.spinner("Searching the documents…"):
-            resp = bot.ask(question, history=history, include_outdated=True if include_old else None,
-                           area=None if area == "All" else area)
+        kwargs = {"history": history, "include_outdated": True if include_old else None,
+                  "area": None if area == "All" else area}
+        if show_work:
+            view = PipelineView(rag.retriever, speed=speed, show_map=show_map)
+            resp = bot.ask(question, on_step=view, **kwargs)
+            st.write_stream(typewriter(resp.answer, speed))
+        else:
+            with st.spinner("Searching the documents…"):
+                resp = bot.ask(question, **kwargs)
+            st.markdown(resp.answer)
         msg = {"role": "assistant", "content": resp.answer, "confidence": resp.confidence,
-               "warnings": resp.warnings, "sources": resp.sources, "trace": resp.queries}
-        render_response(msg)
+               "warnings": resp.warnings, "sources": resp.sources, "trace": resp.trace, "docs": resp.retrieved}
+        render_sources(msg)
     st.session_state.messages.append(msg)

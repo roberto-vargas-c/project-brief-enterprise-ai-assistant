@@ -2,7 +2,7 @@
 
 - Documents ingested: **83** (20 policies, 63 catalogs)
 - Pages: **2308**
-- Chunks indexed: **3766**
+- Chunks indexed: **3731**
 - Products parsed: **3252**
 
 ## Policies

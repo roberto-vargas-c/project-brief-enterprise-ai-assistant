@@ -94,3 +94,17 @@ def test_zip_slip_and_junk_are_ignored(tmp_path):
     out = extract_zip(z, tmp_path / "out")
     assert [p.name for p in out] == ["ok.pdf"]
     assert not (tmp_path / "escape.pdf").exists()
+
+
+def test_chunks_keep_sentences_that_cross_page_breaks():
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    from ironstore_assistant.ingest import split_across_pages
+
+    pages = ["Intro.\n" + "filler " * 120 + "\nGoods are accepted within 30 calendar days of",
+             "delivery. Exceptions apply.\n" + "more " * 50]
+    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50, add_start_index=True)
+    chunks = split_across_pages(pages, splitter)
+    spanning = [(first, last) for text, first, last in chunks if "30 calendar days of\ndelivery" in text]
+    assert spanning == [(1, 2)]
+    assert chunks[0][1] == 1 and chunks[-1][2] == 2

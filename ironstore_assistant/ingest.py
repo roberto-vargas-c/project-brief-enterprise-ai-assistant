@@ -21,6 +21,7 @@ without building the index (no API key needed).
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import re
 import zipfile
@@ -208,7 +209,8 @@ def ingest(pdf_paths: list[Path] | None = None) -> IngestResult:
                 f"{doc.source}: last reviewed {doc.meta['last_reviewed']} (newest document: {newest:%B %Y})")
 
     # 4. Chunk
-    splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP,
+                                              add_start_index=True)
     chunks: list[Document] = []
     product_rows: list[dict] = []
     for doc in sources:
@@ -226,10 +228,10 @@ def ingest(pdf_paths: list[Path] | None = None) -> IngestResult:
         }
         label = _label(base)
         if doc.doc_type == "policy":
-            for page_no, text in enumerate(doc.pages, start=1):
-                for piece in splitter.split_text(text):
-                    chunks.append(Document(page_content=f"{label} | page {page_no}\n{piece}",
-                                           metadata={**base, "page": page_no, "kind": "policy"}))
+            for piece, first, last in split_across_pages(doc.pages, splitter):
+                pages = f"{first}" if first == last else f"{first}-{last}"
+                chunks.append(Document(page_content=f"{label} | page {pages}\n{piece}",
+                                       metadata={**base, "page": first, "page_end": last, "kind": "policy"}))
         else:
             notes, products = parse_catalog(doc.pages, doc.source)
             for page_no, text in notes:
@@ -273,6 +275,26 @@ def ingest(pdf_paths: list[Path] | None = None) -> IngestResult:
             issues["Products with missing price or availability"].append(f"{r.sku} {r.name} ({r.source} p.{r.page})")
 
     return IngestResult(documents=unique, sources=sources, products=products, issues=dict(issues))
+
+
+def split_across_pages(pages: list[str], splitter: RecursiveCharacterTextSplitter) -> list[tuple[str, int, int]]:
+    """Chunk the whole document, then work out which page(s) each chunk comes from.
+
+    Splitting page by page cut sentences that run over a page break in two. In the Refund
+    policy "goods are accepted within 30 calendar days of" ends page 2 and "delivery" starts
+    page 3, so neither half answered "what is the return window?".
+    """
+    text, starts = "", []
+    for page in pages:
+        starts.append(len(text))
+        text += page + "\n"
+    out = []
+    for d in splitter.create_documents([text]):
+        begin = d.metadata["start_index"]
+        first = bisect.bisect_right(starts, begin)
+        last = bisect.bisect_right(starts, begin + len(d.page_content) - 1)
+        out.append((d.page_content, first, last))
+    return out
 
 
 def _label(meta: dict) -> str:
