@@ -5,6 +5,8 @@ Build an AI-powered enterprise assistant that enables employees to access intern
 
 ![](./project-intro.png)
 
+> **Solution:** see [SOLUTION.md](SOLUTION.md) for the working assistant (LangChain + FAISS + OpenAI, Streamlit UI), how to run it, the tool choices, and how the messy data is handled.
+
 
 ## Your task:
 

@@ -1,0 +1,17 @@
+# Core (tested with the versions in brackets)
+langchain>=1.0              # [1.4.7]
+langchain-core>=1.0         # [1.7.3]
+langchain-openai>=1.0       # [1.7.3]
+langchain-community>=0.4    # [0.4.2]  FAISS vector store wrapper
+langchain-text-splitters>=1.0
+faiss-cpu>=1.9              # [1.15.1]
+pypdf>=5.0                  # [6.17.0]
+pandas>=2.2
+scikit-learn>=1.5           # offline TF-IDF embeddings
+python-dotenv>=1.0
+streamlit>=1.40             # [1.66.1]
+pytest>=8
+
+# Optional: free local embeddings (IRONSTORE_EMBEDDINGS=huggingface)
+# langchain-huggingface
+# sentence-transformers
