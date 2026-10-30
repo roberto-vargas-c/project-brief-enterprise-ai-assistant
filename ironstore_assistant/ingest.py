@@ -329,7 +329,7 @@ def quality_report(result: IngestResult) -> str:
     ]
     for s in sorted(policies, key=lambda s: (s.area, s.title)):
         m = s.meta
-        doc_id = m.get("doc_id", "—") + (" ⚠️ shared" if m.get("id_conflict") else "")
+        doc_id = m.get("doc_id", "—") + (" (shared ID)" if m.get("id_conflict") else "")
         lines.append(f"| {s.area} | {s.title} | {doc_id} | {m.get('version', '—')} | "
                      f"{m.get('last_reviewed', '—')} | {m.get('effective_date', '—')} | {s.source} |")
     lines += ["", "## Issues found and how they are handled", ""]

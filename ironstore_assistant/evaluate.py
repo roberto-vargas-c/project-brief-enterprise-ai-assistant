@@ -132,7 +132,7 @@ def to_markdown(rows: list[dict], title: str) -> str:
     out.append("| " + " | ".join(cols) + " |")
     out.append("|" + "---|" * len(cols))
     for r in rows:
-        out.append("| " + " | ".join(("✅" if v else "❌") if isinstance(v, bool) else
+        out.append("| " + " | ".join(("yes" if v else "no") if isinstance(v, bool) else
                                      (f"{v:.0%}" if isinstance(v, float) and k == "recall" else str(v))
                                      for k, v in ((c, r[c]) for c in cols)) + " |")
     if "answer" in rows[0]:

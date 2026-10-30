@@ -4,6 +4,8 @@ A chat assistant that answers IronStore employees' questions from the 83 interna
 Every answer cites the **document and page** it comes from, shows a **confidence level**, and says
 plainly when the documents don't contain the answer.
 
+![IronStore Assistant](docs/images/home.png)
+
 ## Quick start
 
 ```bash
@@ -107,20 +109,21 @@ ingestion step.
 - **Data-quality report** (`python -m ironstore_assistant.ingest`).
 - **Evaluation set** of 20 cases including every trap (`python -m ironstore_assistant.evaluate`).
 - **Department filter** and **include outdated** switch in the UI.
-- **🎬 Show my work**: an animated, step-by-step view of every answer (see below).
+- **Show my work**: an animated, step-by-step view of every answer (see below).
+- **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter, clickable source cards and a glowing knowledge map.
 - **Offline mode** (TF-IDF embeddings) and **25 offline tests** with a fake LLM.
 
-## 🎬 Show my work
+## Show my work
 
 With *Animate how I find the answer* on (sidebar), each answer is built live in front of you:
 
-1. 🧠 **Understanding**: a follow-up is rewritten into a standalone question (strikethrough → new question).
-2. ✍️ **Rewording**: the multi-query versions pop in one by one.
-3. 🔎 **Searching**: top hits from 🧭 meaning (FAISS) and 🔤 keywords (TF-IDF) side by side, with animated score bars.
-4. 🏆 **Rank fusion**: the leaderboard of merged results; chunks skipped for variety are greyed out.
-5. 🗺️ **Knowledge map**: every chunk is a dot (PCA of its embedding). The ⭐ question drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**.
-6. 📚 **Passages**: the numbered cards the model reads, each tagged with the search that found it.
-7. ✅ **Citations checked**: which passages were actually cited, then the answer types itself out.
+1. **Understanding**: a follow-up is rewritten into a standalone question (strikethrough → new question).
+2. **Rewording**: the multi-query versions pop in one by one.
+3. **Searching**: top hits from meaning (FAISS) and keywords (TF-IDF) side by side, with animated score bars.
+4. **Rank fusion**: the leaderboard of merged results; chunks skipped for variety are greyed out.
+5. **Knowledge map**: every chunk is a dot (PCA of its embedding). The question (a yellow Q) drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**.
+6. **Passages**: the numbered cards the model reads, each tagged with the search that found it.
+7. **Citations checked**: which passages were actually cited, then the answer types itself out.
 
 ![Show my work](docs/images/show_my_work.png)
 

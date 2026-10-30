@@ -1,5 +1,24 @@
 [theme]
-primaryColor = "#2563eb"
+base = "dark"
+primaryColor = "#8b5cf6"
+backgroundColor = "#070b18"
+secondaryBackgroundColor = "#111a2e"
+textColor = "#e6e9f5"
+borderColor = "#24304d"
+linkColor = "#67e8f9"
+baseRadius = "0.9rem"
+buttonRadius = "full"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Space Grotesk:https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"
+headingFontWeights = 700
+
+[theme.sidebar]
+backgroundColor = "#0b1224"
+secondaryBackgroundColor = "#141e36"
+
+[client]
+toolbarMode = "viewer"
 
 [server]
 headless = true

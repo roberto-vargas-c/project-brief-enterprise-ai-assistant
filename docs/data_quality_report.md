@@ -9,9 +9,9 @@
 
 | Area | Title | ID | Version | Last reviewed | Effective | File |
 |---|---|---|---|---|---|---|
-| Customer support | Customer Support Escalation Procedures | CS-POL-014 ⚠️ shared | 3.2 | August 2026 | — | IronStore_Customer_Support_Escalation_Procedures.pdf |
+| Customer support | Customer Support Escalation Procedures | CS-POL-014 (shared ID) | 3.2 | August 2026 | — | IronStore_Customer_Support_Escalation_Procedures.pdf |
 | Customer support | Customer Support Knowledge Base Style Guide | CS-KB-STD-004 | — | August 2026 | — | IronStore_Customer_Support_Knowledge_Base_Style_Guide.pdf |
-| Customer support | Refund & Complaint Handling Policy | CS-POL-014 ⚠️ shared | 3.2 | August 2026 | — | IronStore_Refund_and_Complaint_Handling_Policy.pdf |
+| Customer support | Refund & Complaint Handling Policy | CS-POL-014 (shared ID) | 3.2 | August 2026 | — | IronStore_Refund_and_Complaint_Handling_Policy.pdf |
 | Deliveries | Returns & Reverse Logistics Procedure | DEL-RET-004 | 3.2 | August 2026 | — | IronStore_Returns_and_Reverse_Logistics_Procedure.pdf |
 | Deliveries | Shipping & Delivery SLA Policy | DEL-SLA-004 | — | August 2026 | 1 September 2026 | IronStore_Shipping_and_Delivery_SLA_Policy.pdf |
 | Deliveries | Warehouse Operations Manual | DEL-WH-001 | 3.2 | August 2026 | — | IronStore_Warehouse_Operations_Manual.pdf |
