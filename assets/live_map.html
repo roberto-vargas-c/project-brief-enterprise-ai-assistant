@@ -34,6 +34,10 @@
   :fullscreen body, body:fullscreen { background: #070b18; }
   :fullscreen .wrap { height: 100vh; border-radius: 0; border: 0; }
   :fullscreen .caption { font-size: 16px; }
+  /* live map covering the whole window: room at the bottom for the chat box that floats over it */
+  body.overlay { background: #070b18; }
+  .overlay .wrap { height: 100vh; border-radius: 0; border: 0; }
+  .overlay .caption { font-size: 16px; padding: 18px max(18px, calc(50% - 520px)) 124px; max-height: 50%; }
   .steps { position: absolute; top: 12px; left: 14px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; pointer-events: none; }
   .steps span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
                 background: rgba(11,18,36,.7); border: 1px solid rgba(139,151,181,.18); color: #5b6785; transition: all .3s; }
@@ -283,12 +287,26 @@ stage.addEventListener("pointerup", e => { stage.classList.remove("dragging"); c
   if (!click) return; const p = pick(e); if (p) p.sel !== undefined ? openSel(p.sel) : openDot(p.dot); });
 stage.addEventListener("pointerleave", () => { tip.style.opacity = 0; });
 
-// full screen
-$("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen()
-  : document.documentElement.requestFullscreen().catch(() => {});
-document.addEventListener("fullscreenchange", () => { const on = !!document.fullscreenElement;
+// full screen: the live map opens covering the whole window and this button docks it into the chat;
+// the other maps use the browser's full screen
+const host = (() => { try { return D.overlay && window.frameElement; } catch (e) { return null; } })();
+const ICON_OPEN = "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5", ICON_CLOSE = "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5";
+function setFull(on) {
   $("fs").title = on ? "Exit full screen" : "Full screen";
-  $("fs-icon").setAttribute("d", on ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"); });
+  $("fs-icon").setAttribute("d", on ? ICON_CLOSE : ICON_OPEN);
+}
+function setOverlay(on) {
+  host.classList.toggle("map-full", on); document.body.classList.toggle("overlay", on); setFull(on);
+}
+if (host) {
+  setOverlay(true);
+  $("fs").onclick = () => setOverlay(!host.classList.contains("map-full"));
+  addEventListener("keydown", e => { if (e.key === "Escape" && host.classList.contains("map-full")) setOverlay(false); });
+} else {
+  $("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen()
+    : document.documentElement.requestFullscreen().catch(() => {});
+  document.addEventListener("fullscreenchange", () => setFull(!!document.fullscreenElement));
+}
 
 // -- the story: one handler per pipeline event -------------------------------------------------
 let mode = null;  // "reading" while the model writes
