@@ -148,3 +148,25 @@ def test_on_step_reports_every_stage(store):
     resp = Assistant(store, llm).ask("How do I request time off?", on_step=lambda name, data: steps.append(name))
     assert steps == ["condense", "expand", "retrieve", "generate", "answer", "validate"]
     assert resp.trace is not None and resp.trace.queries[0] == "How do I request time off?"
+
+
+def test_live_map_streams_every_step_to_its_event_file(store):
+    import json
+
+    from live_view import LiveMap
+
+    llm = FakeLLM(text="annual leave request", structured=StructuredAnswer(
+        answer="Use PeopleHub [1].", citations=[1], confidence="high", answerable=True))
+    bot = Assistant(store, llm)
+    live = LiveMap(bot.retriever, "How do I request time off?", speed=0)
+    resp = bot.ask("How do I request time off?", on_step=live)
+    live.finish(resp)
+    events = json.loads(live.path.read_text())["events"]
+    live.path.unlink()
+    assert [e["type"] for e in events] == ["start", "condense", "expand", "retrieve", "generate", "answer", "done"]
+    retrieve = events[3]
+    assert retrieve["searches"] and len(retrieve["selected"]) == len(resp.retrieved)
+    n = len(bot.retriever.docs)
+    assert all(0 <= h["i"] < n for h in retrieve["selected"])
+    assert events[5]["cited"] == [1] and events[5]["confidence"] == "high"
+    assert all(-50.01 <= c <= 50.01 for c in events[0]["q"])

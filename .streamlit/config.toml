@@ -22,3 +22,5 @@ toolbarMode = "viewer"
 
 [server]
 headless = true
+# serves ./static at app/static: the live 3D map reads its step-by-step events from there
+enableStaticServing = true
