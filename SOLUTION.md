@@ -4,6 +4,8 @@ A chat assistant that answers IronStore employees' questions from the 83 interna
 Every answer cites the **document and page** it comes from, shows a **confidence level**, and says
 plainly when the documents don't contain the answer.
 
+![IronStore Assistant](docs/images/home.png)
+
 ## Quick start
 
 ```bash
@@ -108,6 +110,7 @@ ingestion step.
 - **Evaluation set** of 20 cases including every trap (`python -m ironstore_assistant.evaluate`).
 - **Department filter** and **include outdated** switch in the UI.
 - **🎬 Show my work**: an animated, step-by-step view of every answer (see below).
+- **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter, clickable source cards and a glowing knowledge map.
 - **Offline mode** (TF-IDF embeddings) and **25 offline tests** with a fake LLM.
 
 ## 🎬 Show my work
