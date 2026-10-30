@@ -154,9 +154,7 @@ if question:
             except Exception as e:
                 live.finish(error="Something went wrong while answering. Please try again.")
                 raise e
-            live.finish(resp)
-            live.wait_for_animation()
-            st.markdown(resp.answer)
+            live.finish(resp)  # the answer and its sources are shown inside the map
         elif show_work:
             view = PipelineView(rag.retriever, speed=speed, show_map=show_map)
             resp = bot.ask(question, on_step=view, **kwargs)
@@ -167,5 +165,6 @@ if question:
             st.markdown(resp.answer)
         msg = {"role": "assistant", "content": resp.answer, "confidence": resp.confidence,
                "warnings": resp.warnings, "sources": resp.sources, "trace": resp.trace, "docs": resp.retrieved}
-        render_sources(msg)
+        if not (show_work and view_mode == "Live 3D map"):
+            render_sources(msg)
     st.session_state.messages.append(msg)

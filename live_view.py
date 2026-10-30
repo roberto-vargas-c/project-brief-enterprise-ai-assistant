@@ -138,32 +138,34 @@ class MapEvents:
         return {**self.base, "events": events, "poll": poll, "speed": speed}
 
 
-def _render(data: dict, height: int) -> None:
-    page = (TEMPLATE.read_text().replace("__HEIGHT__", str(height))
+def _render(data: dict, height: int | None) -> None:
+    """height=None fills the screen: the map takes its frame's full height, and ui.py sizes the frame
+    (inside a container keyed "livemap") to the space between the question and the chat input."""
+    page = (TEMPLATE.read_text().replace("__HEIGHT__", f"{height}px" if height else "100vh")
             .replace("__DATA__", json.dumps(data).replace("</", "<\\/")))
     # The page is built from our own index and answer, and every text is escaped before it is shown.
     if hasattr(st, "iframe"):
-        st.iframe(page, height=height + 70)
+        st.iframe(page, height=height or 640)
     else:
         import streamlit.components.v1 as components
 
-        components.html(page, height=height + 70)
+        components.html(page, height=height or 640)
 
 
 class LiveMap:
-    """`on_step` callback that streams each pipeline step to the 3D map while the answer is built."""
+    """`on_step` callback that streams each pipeline step to the 3D map while the answer is built.
+    The map fills the answer area; the answer and its sources are typed into its caption."""
 
-    def __init__(self, retriever: Retriever, question: str, speed: float = 1.0, height: int = 600):
+    def __init__(self, retriever: Retriever, question: str, speed: float = 1.0):
         self.ev = MapEvents(retriever)
         LIVE_DIR.mkdir(parents=True, exist_ok=True)
         self._cleanup()
         name = f"{uuid.uuid4().hex}.json"
         self.path = LIVE_DIR / name
         self.events: list[dict] = []
-        self.arrivals: list[float] = []  # seconds after start, one per event
-        self.speed, self.t0 = speed, time.monotonic()
         self._emit(self.ev.start(question))
-        _render(self.ev.payload(None, f"{LIVE_URL}/{name}", speed), height)
+        with st.container(key="livemap"):
+            _render(self.ev.payload(None, f"{LIVE_URL}/{name}", speed), None)
 
     def __call__(self, name: str, data: dict) -> None:
         if name == "condense":
@@ -184,41 +186,8 @@ class LiveMap:
             self._emit(self.ev.answer(resp))  # e.g. nothing was found, so there was no validate step
         self._emit({"type": "done", "error": error})
 
-    def wait_for_animation(self, limit: float = 12) -> None:
-        """Hold the text answer below the map until the map reaches the answer, so it doesn't give the
-        ending away. The map plays each event when it arrives, or when it finishes the previous one if
-        that is later; this replays that timeline with the pauses used in live_map.html."""
-        clock = 1.0  # the page and three.js take about a second to start
-        for (e, arrived) in zip(self.events, self.arrivals):
-            if e["type"] == "answer":
-                break
-            clock = max(clock, arrived) + self._duration(e) * self.speed
-        remaining = clock + 0.8 * self.speed - (time.monotonic() - self.t0)
-        if remaining > 0:
-            time.sleep(min(remaining, limit))
-
-    @staticmethod
-    def _duration(e: dict) -> float:
-        t = e["type"]
-        if t == "start":
-            return 0.3 + len(e["question"]) / 2 * 0.018
-        if t == "condense":
-            return 0.9 + len(e["standalone"]) / 2 * 0.014 if e["rewritten"] else 0
-        if t == "expand":
-            return 0.3 * len(e["queries"]) + 0.2
-        if t == "tool":
-            return 0.9
-        if t == "retrieve":
-            searches = sum(max(0.8, (len(s["semantic"]) + len(s["keyword"]) + len(s["sku"])) * 0.045 + 0.6)
-                           for s in e["searches"])
-            return searches + 0.6 + 0.12 * len(e["selected"]) + 0.5 + 0.4  # + the two captions
-        if t == "generate":
-            return 0.6
-        return 0
-
     def _emit(self, event: dict) -> None:
         self.events.append(event)
-        self.arrivals.append(time.monotonic() - self.t0)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"events": self.events}))
         os.replace(tmp, self.path)  # atomic, so the map never reads half a file

@@ -86,6 +86,11 @@ GLOBAL_CSS = """
 [data-testid="stChatInput"] { border: 1px solid rgba(139, 92, 246, .45) !important; border-radius: 1.2rem !important;
                               box-shadow: 0 0 0 4px rgba(139, 92, 246, .08), 0 10px 40px rgba(0, 0, 0, .35); }
 
+/* the live 3D map fills the space between the question and the chat input */
+.st-key-livemap iframe { height: max(480px, calc(100vh - 250px)) !important; display: block; }
+.st-key-livemap [data-testid="stElementContainer"] { height: auto !important; }
+[data-testid="stChatMessage"]:has(.st-key-livemap) { padding: .5rem; }
+
 /* "show my work" steps (st.status) */
 [data-testid="stExpander"] details { background: rgba(10, 16, 32, .55); border: 1px solid var(--line);
                                      border-radius: .9rem; }

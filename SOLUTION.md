@@ -130,11 +130,14 @@ and the answer is built on the map **while it happens**:
 4. **Fusion**: rank fusion picks the passages; the 8 winners get numbered badges and lines from the Q.
 5. **Writing**: sparks flow from the passages back to the Q while the model reads them.
 6. **Answer**: the cited passages turn green and pulse, and the answer is typed out in the caption bar
-   at the bottom, with its confidence.
+   at the bottom, with its confidence and the cited sources (click one to read the passage).
+
+The map fills the whole answer area, from the question down to the chat box, and the answer lives inside
+it, so nothing is repeated below.
 
 How it streams: `LiveMap` (`live_view.py`) is the `on_step` callback. It writes each step to a small JSON
 file under `static/live/`, which Streamlit serves (`enableStaticServing`), and the map polls it four times a
-second. The text answer below the map waits until the map reaches the answer, so it doesn't spoil the ending.
+second.
 
 You can explore at any time: drag to rotate, right-drag to move, scroll to zoom, hover any dot for its
 document and page, click a numbered passage to read it, click a department in the legend to hide it, and

@@ -19,21 +19,20 @@
   <div class="panel" id="panel"><button class="close" id="close" title="Close">
     <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div id="panel-body"></div></div>
   <div class="fallback" id="fallback">The 3D map needs WebGL and could not start in this browser.</div>
+  <div class="legend" id="legend"></div>
 </div>
-<div class="legend" id="legend"></div>
 
 <style>
   html, body { margin: 0; background: transparent; }
   body { font-family: Inter, "Source Sans Pro", sans-serif; color: #8b97b5; }
-  .wrap { position: relative; height: __HEIGHT__px; border-radius: 14px; overflow: hidden;
+  .wrap { position: relative; height: __HEIGHT__; box-sizing: border-box; border-radius: 14px; overflow: hidden;
           border: 1px solid rgba(139,151,181,.18); background: radial-gradient(ellipse at 50% 35%, #172146, #070b18 75%); }
   #stage, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #stage { cursor: grab; touch-action: none; }
   #stage.dragging { cursor: grabbing; }
   #stage.pointing { cursor: pointer; }
   :fullscreen body, body:fullscreen { background: #070b18; }
-  :fullscreen .wrap { height: calc(100vh - 44px); border-radius: 0; border: 0; }
-  :fullscreen .legend { padding: 0 16px; }
+  :fullscreen .wrap { height: 100vh; border-radius: 0; border: 0; }
   :fullscreen .caption { font-size: 16px; }
   .steps { position: absolute; top: 12px; left: 14px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; pointer-events: none; }
   .steps span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
@@ -65,13 +64,16 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chips span { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(139,92,246,.45);
                 background: rgba(139,92,246,.14); animation: rise .35s ease both; transition: all .25s; }
+  .chips .src { cursor: pointer; border-color: rgba(52,211,153,.5); background: rgba(52,211,153,.12); }
+  .chips .src:hover { border-color: #34d399; color: #fff; }
+  .chips .src b { color: #6ee7b7; margin-right: 4px; }
   .chips span.on { background: rgba(34,211,238,.22); border-color: #22d3ee; color: #fff; box-shadow: 0 0 14px rgba(34,211,238,.4); }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
   .tip { position: absolute; pointer-events: none; background: rgba(11,18,36,.95); color: #e6e9f5; font-size: 12px;
          padding: 6px 9px; border-radius: 8px; border: 1px solid rgba(139,151,181,.3); max-width: 280px; z-index: 4;
          opacity: 0; transition: opacity .1s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tip small { display: block; color: #8b97b5; }
-  .panel { position: absolute; top: 44px; left: 10px; width: min(340px, 60%); max-height: calc(58% - 50px); overflow: auto;
+  .panel { position: absolute; top: 96px; left: 10px; width: min(360px, 60%); max-height: calc(55% - 100px); overflow: auto;
            background: rgba(11,18,36,.95); border: 1px solid rgba(139,92,246,.5); border-radius: 12px; padding: 12px 14px;
            color: #e6e9f5; font-size: 13px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,.5); z-index: 3; }
   .panel.open { display: block; animation: rise .2s ease; }
@@ -83,8 +85,10 @@
   .panel .tag.cited { background: rgba(52,211,153,.18); color: #6ee7b7; }
   .panel p { margin: 8px 0 0; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap; }
   .fallback { position: absolute; inset: 0; display: none; place-items: center; color: #8b97b5; font-size: 13px; z-index: 5; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; margin-top: 8px; }
-  .legend span { padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+  .legend { position: absolute; top: 44px; left: 12px; right: 56px; z-index: 2; display: flex; flex-wrap: wrap;
+            gap: 2px 4px; font-size: 11px; pointer-events: none; }
+  .legend span { padding: 1px 8px; border-radius: 999px; border: 1px solid transparent; background: rgba(7,11,24,.55);
+                 pointer-events: auto; }
   .legend .area { cursor: pointer; user-select: none; transition: opacity .15s, border-color .15s; }
   .legend .area:hover { border-color: rgba(139,151,181,.35); }
   .legend .area.off { opacity: .35; text-decoration: line-through; }
@@ -357,6 +361,11 @@ const H = {
     const html = esc(ev.text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>')
       .replace(/\n/g, "<br>") + (ev.warnings || []).map(w => `<span class="warn">${esc(w)}</span>`).join("");
     await say(html, {type: true, chars: 12});
+    // the cited sources, clickable to read the passage
+    $("chips").innerHTML = selected.map((h, j) => cited.has(h.rank)
+      ? `<span class="src" data-j="${j}"><b>[${h.rank}]</b>${esc(h.label)}</span>` : "").join("");
+    $("chips").querySelectorAll(".src").forEach(c => c.onclick = () => openSel(+c.dataset.j));
+    $("caption").scrollTop = 1e6;
   },
   async done(ev) {
     mode = null; $("pulse").classList.add("off");
