@@ -35,7 +35,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
 from . import config
-from .catalog import Product, parse_catalog
+from .catalog import parse_catalog
 
 MONTHS = {m: i for i, m in enumerate(
     ["january", "february", "march", "april", "may", "june", "july", "august",
