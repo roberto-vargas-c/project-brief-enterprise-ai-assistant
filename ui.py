@@ -46,8 +46,14 @@ GLOBAL_CSS = """
 @keyframes float { 50% { transform: translateY(-6px); } }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .hero { text-align: center; padding: 1.2rem 0 1.4rem; animation: rise .7s ease both; }
-.hero .orb { font-size: 3rem; display: inline-block; animation: float 3.5s ease-in-out infinite;
-             filter: drop-shadow(0 10px 30px rgba(139, 92, 246, .55)); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hero .orb { width: 4.2rem; height: 4.2rem; border-radius: 50%; display: inline-block; position: relative;
+             background: radial-gradient(circle at 32% 30%, #f5f3ff 0 8%, #a78bfa 30%, #6d28d9 62%, #1e1b4b 100%);
+             box-shadow: 0 0 40px rgba(139, 92, 246, .65), inset -6px -8px 18px rgba(0, 0, 0, .45);
+             animation: float 3.5s ease-in-out infinite; }
+.hero .orb::after { content: ""; position: absolute; inset: -9px; border-radius: 50%;
+                    border: 2px solid transparent; border-top-color: #67e8f9; border-right-color: rgba(103, 232, 249, .3);
+                    animation: spin 2.8s linear infinite; }
 .hero h1 { font-family: "Space Grotesk", sans-serif; font-size: 3rem !important; line-height: 1.05 !important;
            margin: .3rem 0 .5rem; padding: 0 !important;
            background: linear-gradient(90deg, #c4b5fd, #67e8f9, #f9a8d4, #c4b5fd); background-size: 200% auto;
@@ -109,6 +115,9 @@ GLOBAL_CSS = """
 </style>
 """
 
+LOGO = ('<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8.5 5v10L12 22l-8.5-5V7z"/>'
+        '<circle cx="12" cy="12" r="3"/></svg>')
 CONFIDENCE = {"high": ("High confidence", "#34d399", 3), "medium": ("Medium confidence", "#fbbf24", 2),
               "low": ("Low confidence", "#f87171", 1)}
 
@@ -118,7 +127,7 @@ def inject_css() -> None:
 
 
 def brand() -> None:
-    st.markdown('<div class="brand"><div class="logo">🤖</div><div><b>IronStore Assistant</b>'
+    st.markdown('<div class="brand"><div class="logo">' + LOGO + '</div><div><b>IronStore Assistant</b>'
                 '<span>Answers with sources</span></div></div>', unsafe_allow_html=True)
 
 
@@ -126,7 +135,7 @@ def hero(n_documents: int, n_chunks: int, n_products: int) -> None:
     stats = [(n_documents, "documents"), (n_chunks, "searchable chunks"), (n_products, "products")]
     chips = "".join(f'<span class="stat" style="animation-delay:{.15 + i * .1:.2f}s"><b>{v:,}</b>{label}</span>'
                     for i, (v, label) in enumerate(stats))
-    st.markdown(f"""<div class="hero"><div class="orb">🔮</div>
+    st.markdown(f"""<div class="hero"><div class="orb"></div>
 <h1>Ask IronStore anything</h1>
 <p>Answers from the company's own policies and product catalogs, with the page they came from.
 Turn on <b>Show my work</b> to watch how each answer is found.</p>
@@ -151,6 +160,6 @@ def source_cards(sources) -> str:
         cards.append(f'<details class="src" style="animation-delay:{i * .08:.2f}s"><summary>'
                      f'<span class="num">{s.number}</span>{html.escape(title)}'
                      f'<div class="meta">{html.escape(" · ".join(meta))}</div></summary>'
-                     f'<div class="meta">📄 {html.escape(s.source)}</div>'
+                     f'<div class="meta">File: {html.escape(s.source)}</div>'
                      f'<div class="snip">{html.escape(s.snippet)}</div></details>')
     return '<div class="src-title">Sources · click to read</div><div class="src-grid">' + "".join(cards) + "</div>"

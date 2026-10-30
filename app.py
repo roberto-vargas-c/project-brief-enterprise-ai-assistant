@@ -13,7 +13,7 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="IronStore Assistant", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="IronStore Assistant", page_icon=":material/hub:", layout="centered")
 
 # Streamlit secrets -> environment variables, before the config module reads them
 try:
@@ -37,12 +37,12 @@ if not os.getenv("OPENAI_API_KEY"):
     st.stop()
 
 EXAMPLES = [
-    ("🏡", "What's our remote work policy?"),
-    ("🌴", "How do I request time off?"),
-    ("📦", "What is the return window for customers?"),
-    ("🛋️", "How much does the Nordholm Lysa 3-Seater Sofa cost and is it in stock?"),
+    (":material/home_work:", "What's our remote work policy?"),
+    (":material/beach_access:", "How do I request time off?"),
+    (":material/assignment_return:", "What is the return window for customers?"),
+    (":material/chair:", "How much does the Nordholm Lysa 3-Seater Sofa cost and is it in stock?"),
 ]
-AVATARS = {"user": "🧑‍💼", "assistant": "🤖"}
+AVATARS = {"user": ":material/person:", "assistant": ":material/hub:"}
 
 
 def code_version() -> str:
@@ -73,14 +73,14 @@ with st.sidebar:
     areas = ["All", "Customer support", "Deliveries", "Finance", "HR policies", "IT", "Legal Terms", "Sales",
              "Product catalog"]
     area = st.selectbox("Department", areas)
-    st.subheader("🎬 Show my work")
+    st.subheader("Show my work")
     show_work = st.toggle("Animate how I find the answer", value=True)
     speed_label = st.select_slider("Animation speed", ["Fast", "Normal", "Slow"], value="Normal",
                                    disabled=not show_work)
     show_map = st.toggle("Knowledge map", value=True, disabled=not show_work,
                          help="Plot every chunk on a 2D map and show where your question lands.")
     st.write("")
-    if st.button("✨ New conversation", use_container_width=True):
+    if st.button("New conversation", icon=":material/add_comment:", use_container_width=True):
         st.session_state.messages = []
     manifest = config.INDEX_DIR / "manifest.json"
     embeddings = json.loads(manifest.read_text())["model"] if manifest.exists() else "no index yet"
@@ -104,11 +104,11 @@ def render_sources(msg: dict) -> None:
     if msg.get("confidence"):
         st.markdown(ui.confidence_badge(msg["confidence"]), unsafe_allow_html=True)
     for w in msg.get("warnings", []):
-        st.warning(w, icon="⚠️")
+        st.warning(w, icon=":material/warning:")
     if msg.get("sources"):
         st.markdown(ui.source_cards(msg["sources"]), unsafe_allow_html=True)
     if msg.get("trace") is not None and msg.get("docs"):
-        with st.expander("🔍 How I found this"):
+        with st.expander("How I found this", icon=":material/manage_search:"):
             trace = msg["trace"]
             st.markdown("**Searched with:** " + " · ".join(f"`{q}`" for q in trace.queries))
             st.markdown(passage_cards(msg["docs"], trace, {s.number for s in msg["sources"]}),
@@ -124,7 +124,7 @@ if not st.session_state.messages and not question:
         st.markdown('<div class="try">Try one of these</div>', unsafe_allow_html=True)
         cols = st.columns(2)
         for i, (icon, ex) in enumerate(EXAMPLES):
-            if cols[i % 2].button(f"{icon}  {ex}", use_container_width=True, key=f"ex{i}"):
+            if cols[i % 2].button(ex, icon=icon, use_container_width=True, key=f"ex{i}"):
                 st.session_state.pending = ex
                 st.rerun()
 

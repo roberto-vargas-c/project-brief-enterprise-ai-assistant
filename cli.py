@@ -32,7 +32,7 @@ def main() -> None:
         for s in resp.sources:
             print(f"  [{s.number}] {s.label()} — {s.source}")
         for w in resp.warnings:
-            print(f"  ⚠ {w}")
+            print(f"  Warning: {w}")
         print()
         history += [("user", q), ("assistant", resp.answer)]
 

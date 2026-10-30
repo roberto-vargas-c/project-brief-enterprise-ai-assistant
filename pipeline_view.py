@@ -22,7 +22,7 @@ AREA_COLORS = {
     "Customer support": "#fb7185", "Deliveries": "#fbbf24", "Finance": "#2dd4bf", "HR policies": "#a78bfa",
     "IT": "#60a5fa", "Legal Terms": "#f472b6", "Sales": "#4ade80", "Product catalog": "#94a3b8",
 }
-METHOD_BADGE = {"semantic": "🧭 meaning", "keyword": "🔤 keywords", "sku": "🏷️ exact SKU"}
+METHOD_BADGE = {"semantic": "meaning", "keyword": "keywords", "sku": "exact SKU"}
 
 CSS = """
 <style>
@@ -128,7 +128,7 @@ def knowledge_map(retriever: Retriever, question: str, selected: list[int], cite
                     f'stroke="{ring[0]}" stroke-width="{ring[1] / zoom:.2f}"/><text x="{x:.1f}" y="{y + r * .38:.1f}" '
                     f'text-anchor="middle" font-size="{10 / zoom:.2f}" font-weight="700" fill="#070b18">{rank}</text></g>')
     legend = "".join(f'<span><i style="background:{c}"></i>{a}</span>' for a, c in AREA_COLORS.items())
-    star_size = 22 / zoom
+    q_r = 11 / zoom
     _embed_html(f"""
 <svg viewBox="0 0 {W} {H}" width="100%"
      style="overflow:hidden;border-radius:14px;border:1px solid rgba(139,151,181,.18);
@@ -164,11 +164,12 @@ def knowledge_map(retriever: Retriever, question: str, selected: list[int], cite
     {''.join(links)}
     {''.join(hits)}
     <circle class="halo" cx="{qx:.1f}" cy="{qy:.1f}" r="{40 / zoom:.1f}" fill="url(#halo)"/>
-    <g class="star"><text x="{qx:.1f}" y="{qy + star_size * .35:.1f}" text-anchor="middle"
-       font-size="{star_size:.1f}">⭐</text></g>
+    <g class="star"><circle cx="{qx:.1f}" cy="{qy:.1f}" r="{q_r:.2f}" fill="#fbbf24" stroke="#fff"
+       stroke-width="{2.4 / zoom:.2f}"/><text x="{qx:.1f}" y="{qy + q_r * .36:.1f}" text-anchor="middle"
+       font-size="{q_r:.2f}" font-weight="800" fill="#070b18">Q</text></g>
   </g>
 </svg>
-<div class="legend">{legend}<span>⭐ your question</span><span><i style="background:#34d399"></i>cited</span></div>
+<div class="legend">{legend}<span><i style="background:#fbbf24"></i>your question (Q)</span><span><i style="background:#34d399"></i>cited</span></div>
 <style>
   body {{ margin: 0; font-family: Inter, "Source Sans Pro", sans-serif; color: #8b97b5; background: transparent; }}
   .legend {{ display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: 12px; margin-top: 8px; }}
@@ -211,7 +212,7 @@ def passage_cards(docs, trace: RetrievalTrace, cited_numbers: set[int] | None = 
         state = "" if cited_numbers is None else ("cited" if n in cited_numbers else "unused")
         badges = "".join(f'<span class="pv-badge">{METHOD_BADGE[m]}</span>' for m in sorted(found_by.get(cid, [])))
         if cited_numbers is not None:
-            badges += '<span class="pv-badge">✅ cited</span>' if n in cited_numbers else \
+            badges += '<span class="pv-badge">cited</span>' if n in cited_numbers else \
                 '<span class="pv-badge">not used</span>'
         snippet = html.escape(d.page_content.split("\n", 1)[-1][:220]) + "…"
         score = f" · fusion score {fused[cid]:.4f}" if cid in fused else ""
@@ -242,7 +243,7 @@ class PipelineView:
 
     def on_condense(self, d: dict) -> None:
         self.question = d["standalone"]
-        with st.status("🧠 Understanding your question", expanded=True) as s:
+        with st.status("Understanding your question", expanded=True) as s:
             if d["standalone"] != d["question"]:
                 st.markdown(f"Using the last {d['history_turns']} turn(s) of our chat, I rewrote your follow-up "
                             f"as a standalone question:")
@@ -250,11 +251,11 @@ class PipelineView:
             else:
                 st.markdown(f"> **{d['question']}**")
             _pause(self.speed, .4)
-            s.update(label="🧠 Understood your question", state="complete", expanded=False)
+            s.update(label="Understood your question", state="complete", expanded=False)
 
     def on_expand(self, d: dict) -> None:
         queries = d["queries"]
-        with st.status("✍️ Rewording the question to search better", expanded=True) as s:
+        with st.status("Rewording the question to search better", expanded=True) as s:
             st.caption("Employees and policies rarely use the same words, so I search with several versions "
                        "(multi-query).")
             slot = st.empty()
@@ -263,12 +264,12 @@ class PipelineView:
                 shown.append(f'<span class="pv-query">{html.escape(q)}</span>')
                 slot.markdown(CSS + "".join(shown), unsafe_allow_html=True)
                 _pause(self.speed, .35)
-            s.update(label=f"✍️ Searching with {len(queries)} versions of the question", state="complete",
+            s.update(label=f"Searching with {len(queries)} versions of the question", state="complete",
                      expanded=False)
 
     def on_tool(self, d: dict) -> None:
         if self._tools is None:
-            self._tools = st.status("🛠️ The agent is choosing tools", expanded=True)
+            self._tools = st.status("The agent is choosing tools", expanded=True)
         with self._tools:
             st.markdown(f"**{d['name']}**(`{', '.join(f'{k}={v!r}' for k, v in d['args'].items())}`)")
             st.caption(d["result"][:300] + ("…" if len(d["result"]) > 300 else ""))
@@ -277,13 +278,13 @@ class PipelineView:
     def on_retrieve(self, d: dict) -> None:
         self.docs, self.trace = d["docs"], d["trace"]
         if self._tools is not None:
-            self._tools.update(label="🛠️ The agent gathered its evidence", state="complete", expanded=False)
+            self._tools.update(label="The agent gathered its evidence", state="complete", expanded=False)
         n_chunks = len(self.retriever.docs)
-        with st.status(f"🔎 Searching {n_chunks:,} chunks", expanded=True) as s:
+        with st.status(f"Searching {n_chunks:,} chunks", expanded=True) as s:
             hits = self.trace.hits
             if hits and any(h.method in ("semantic", "keyword") for h in hits):
-                st.caption("Two searches per query: **🧭 meaning** (embeddings in FAISS) finds paraphrases, "
-                           "**🔤 keywords** (TF-IDF) finds exact words like *30 days* or a product name.")
+                st.caption("Two searches per query: **meaning** (embeddings in FAISS) finds paraphrases, "
+                           "**keywords** (TF-IDF) finds exact words like *30 days* or a product name.")
                 first_q = self.trace.queries[0]
                 cols = st.columns(2)
                 for col, method in zip(cols, ("semantic", "keyword")):
@@ -296,12 +297,12 @@ class PipelineView:
                                     unsafe_allow_html=True)
                     _pause(self.speed, .5)
                 if self.trace.excluded_outdated:
-                    st.caption("🗄️ The outdated 2021 catalog was filtered out.")
-            s.update(label=f"🔎 Searched {n_chunks:,} chunks with {len(self.trace.queries)} queries",
+                    st.caption("The outdated 2021 catalog was filtered out.")
+            s.update(label=f"Searched {n_chunks:,} chunks with {len(self.trace.queries)} queries",
                      state="complete", expanded=False)
 
         if self.trace.fused:
-            with st.status("🏆 Merging the results (rank fusion)", expanded=True) as s:
+            with st.status("Merging the results (rank fusion)", expanded=True) as s:
                 st.caption("Each search votes for its results: 1/(60 + rank) points per vote. Chunks found by "
                            "several queries and by both methods win. Max 3 chunks per document, for variety.")
                 chosen = set(self.trace.selected)
@@ -314,26 +315,26 @@ class PipelineView:
                     rows.append((_doc_label(doc) + tag, score, _color(doc) if cid in chosen else "#334155"))
                 st.markdown(score_bars(rows, top[0][1]), unsafe_allow_html=True)
                 _pause(self.speed, .9)
-                s.update(label=f"🏆 Picked the {len(self.docs)} best passages", state="complete", expanded=False)
+                s.update(label=f"Picked the {len(self.docs)} best passages", state="complete", expanded=False)
 
         if self.show_map and self.trace.selected:
-            with st.status("🗺️ Where your question lands", expanded=True) as s:
+            with st.status("Where your question lands", expanded=True) as s:
                 st.caption("Every dot is a chunk, placed by its embedding (PCA to 2D). Close dots talk about "
-                           "similar things. The ⭐ is your question; the numbers are the passages I picked.")
+                           "similar things. The yellow Q is your question; the numbers are the passages I picked.")
                 self._map_slot = st.empty()
                 with self._map_slot.container():
                     knowledge_map(self.retriever, self.question, self.trace.selected)
                 _pause(self.speed, 3.5)
-                s.update(label="🗺️ Your question on the knowledge map", state="complete", expanded=True)
+                s.update(label="Your question on the knowledge map", state="complete", expanded=True)
 
-        with st.status(f"📚 Reading {len(self.docs)} passages", expanded=True) as s:
+        with st.status(f"Reading {len(self.docs)} passages", expanded=True) as s:
             st.markdown(passage_cards(self.docs, self.trace), unsafe_allow_html=True)
             _pause(self.speed, .8)
-            s.update(label=f"📚 Sent {len(self.docs)} numbered passages to the model", state="complete",
+            s.update(label=f"Sent {len(self.docs)} numbered passages to the model", state="complete",
                      expanded=False)
 
     def on_generate(self, d: dict) -> None:
-        self._gen_status = st.status("🤖 Writing an answer that cites its passages…", expanded=False)
+        self._gen_status = st.status("Writing an answer that cites its passages…", expanded=False)
 
     def on_validate(self, d: dict) -> None:
         resp = d["response"]
@@ -342,7 +343,7 @@ class PipelineView:
             st.markdown(f"The model cited **{len(cited)}** of {len(self.docs)} passages and rated its confidence "
                         f"**{resp.confidence}**. I checked every citation points to a real passage.")
             st.markdown(passage_cards(self.docs, self.trace, cited), unsafe_allow_html=True)
-        self._gen_status.update(label=f"✅ Answer written and citations checked ({len(cited)} cited)",
+        self._gen_status.update(label=f"Answer written and citations checked ({len(cited)} cited)",
                                 state="complete", expanded=False)
         if self._map_slot is not None and cited:
             cited_ids = {self.docs[n - 1].metadata.get("chunk_id") for n in cited}
