@@ -1,0 +1,425 @@
+<div class="wrap" id="wrap">
+  <div id="stage"></div>
+  <div class="steps" id="steps"></div>
+  <div class="controls">
+    <button id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path id="fs-icon" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button id="zin" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button id="zout" title="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button id="focus" title="Back to my question"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+    <button id="all" title="Show the whole map"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></button>
+    <button id="spin" title="Rotate"><svg viewBox="0 0 24 24"><path id="spin-icon" d="M8 5l11 7-11 7z"/></svg></button>
+  </div>
+  <div class="caption" id="caption">
+    <div class="cap-head"><span class="cap-step" id="cap-step">Starting</span><span class="pulse" id="pulse"></span>
+      <span class="cap-conf" id="cap-conf"></span></div>
+    <div class="cap-text" id="cap-text"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="tip" id="tip"></div>
+  <div class="panel" id="panel"><button class="close" id="close" title="Close">
+    <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div id="panel-body"></div></div>
+  <div class="fallback" id="fallback">The 3D map needs WebGL and could not start in this browser.</div>
+</div>
+<div class="legend" id="legend"></div>
+
+<style>
+  html, body { margin: 0; background: transparent; }
+  body { font-family: Inter, "Source Sans Pro", sans-serif; color: #8b97b5; }
+  .wrap { position: relative; height: __HEIGHT__px; border-radius: 14px; overflow: hidden;
+          border: 1px solid rgba(139,151,181,.18); background: radial-gradient(ellipse at 50% 35%, #172146, #070b18 75%); }
+  #stage, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stage { cursor: grab; touch-action: none; }
+  #stage.dragging { cursor: grabbing; }
+  #stage.pointing { cursor: pointer; }
+  :fullscreen body, body:fullscreen { background: #070b18; }
+  :fullscreen .wrap { height: calc(100vh - 44px); border-radius: 0; border: 0; }
+  :fullscreen .legend { padding: 0 16px; }
+  :fullscreen .caption { font-size: 16px; }
+  .steps { position: absolute; top: 12px; left: 14px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; pointer-events: none; }
+  .steps span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+                background: rgba(11,18,36,.7); border: 1px solid rgba(139,151,181,.18); color: #5b6785; transition: all .3s; }
+  .steps span.done { color: #8b97b5; }
+  .steps span.on { color: #fff; border-color: #8b5cf6; background: rgba(139,92,246,.25); box-shadow: 0 0 16px rgba(139,92,246,.45); }
+  .controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
+  .controls button, .close { width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(139,151,181,.25);
+          background: rgba(11,18,36,.85); color: #e6e9f5; display: grid; place-items: center; cursor: pointer;
+          transition: border-color .15s, transform .15s; padding: 0; }
+  .controls button:hover, .close:hover { border-color: #8b5cf6; transform: translateY(-1px); }
+  #fs { border-color: rgba(139,92,246,.6); }
+  button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+               stroke-linejoin: round; }
+  .caption { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 14px 18px 16px; font-size: 14px;
+             color: #e6e9f5; max-height: 42%; overflow: auto;
+             background: linear-gradient(180deg, rgba(7,11,24,0), rgba(7,11,24,.85) 28%, rgba(7,11,24,.96)); }
+  .cap-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .cap-step { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #a78bfa; font-weight: 600; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; box-shadow: 0 0 0 0 rgba(139,92,246,.7);
+           animation: pulse 1.2s infinite; }
+  .pulse.off { animation: none; background: #34d399; box-shadow: none; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(139,92,246,0); } 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); } }
+  .cap-conf { font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; display: none; }
+  .cap-text { line-height: 1.55; min-height: 1.5em; }
+  .cap-text b { color: #fff; }
+  .cap-text .cite { color: #6ee7b7; font-weight: 600; }
+  .cap-text .warn { display: block; color: #fbbf24; font-size: 12px; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chips span { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(139,92,246,.45);
+                background: rgba(139,92,246,.14); animation: rise .35s ease both; transition: all .25s; }
+  .chips span.on { background: rgba(34,211,238,.22); border-color: #22d3ee; color: #fff; box-shadow: 0 0 14px rgba(34,211,238,.4); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .tip { position: absolute; pointer-events: none; background: rgba(11,18,36,.95); color: #e6e9f5; font-size: 12px;
+         padding: 6px 9px; border-radius: 8px; border: 1px solid rgba(139,151,181,.3); max-width: 280px; z-index: 4;
+         opacity: 0; transition: opacity .1s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tip small { display: block; color: #8b97b5; }
+  .panel { position: absolute; top: 44px; left: 10px; width: min(340px, 60%); max-height: calc(58% - 50px); overflow: auto;
+           background: rgba(11,18,36,.95); border: 1px solid rgba(139,92,246,.5); border-radius: 12px; padding: 12px 14px;
+           color: #e6e9f5; font-size: 13px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,.5); z-index: 3; }
+  .panel.open { display: block; animation: rise .2s ease; }
+  .panel .close { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; }
+  .panel h4 { margin: 0 30px 4px 0; font-size: 14px; }
+  .panel .meta { color: #8b97b5; font-size: 12px; }
+  .panel .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; margin: 6px 4px 0 0;
+                background: rgba(139,92,246,.2); color: #ddd6fe; }
+  .panel .tag.cited { background: rgba(52,211,153,.18); color: #6ee7b7; }
+  .panel p { margin: 8px 0 0; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap; }
+  .fallback { position: absolute; inset: 0; display: none; place-items: center; color: #8b97b5; font-size: 13px; z-index: 5; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; margin-top: 8px; }
+  .legend span { padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+  .legend .area { cursor: pointer; user-select: none; transition: opacity .15s, border-color .15s; }
+  .legend .area:hover { border-color: rgba(139,151,181,.35); }
+  .legend .area.off { opacity: .35; text-decoration: line-through; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+</style>
+
+<script type="importmap">
+{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+             "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script id="map-data" type="application/json">__DATA__</script>
+<script type="module">
+const D = JSON.parse(document.getElementById("map-data").textContent);
+const SPEED = D.speed || 1;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms * SPEED));
+const SEM = "#22d3ee", KEY = "#c084fc";  // meaning search, keyword search
+
+// -- legend, steps, caption and panel (plain DOM) ---------------------------------------------
+const present = new Set(D.a), hidden = new Set(), clouds = [];
+const legend = $("legend");
+D.areas.forEach((a, idx) => { if (!present.has(idx)) return; const s = document.createElement("span"); s.className = "area";
+  s.innerHTML = `<i style="background:${D.colors[idx]}"></i>${esc(a)}`; s.title = "Click to hide or show";
+  s.onclick = () => { const off = !hidden.has(idx); off ? hidden.add(idx) : hidden.delete(idx); s.classList.toggle("off", off);
+    if (clouds[idx]) clouds[idx].visible = !off; };
+  legend.appendChild(s); });
+legend.insertAdjacentHTML("beforeend", `<span><i style="background:#fbbf24"></i>your question (Q)</span>` +
+  `<span><i style="background:${SEM}"></i>found by meaning</span><span><i style="background:${KEY}"></i>found by keywords</span>` +
+  `<span><i style="background:#34d399"></i>cited</span>`);
+
+const STEPS = ["Question", "Rewording", "Searching", "Fusion", "Writing", "Answer"];
+$("steps").innerHTML = STEPS.map(s => `<span>${s}</span>`).join("");
+function setStep(name) { const k = STEPS.indexOf(name);
+  [...$("steps").children].forEach((el, i) => { el.classList.toggle("on", i === k); el.classList.toggle("done", i < k); });
+  $("cap-step").textContent = name; }
+let typing = 0;
+async function say(html, {type = false, chars = 14} = {}) {
+  const el = $("cap-text"), my = ++typing;
+  if (!type) { el.innerHTML = html; return; }
+  // type the plain text, then swap in the formatted version
+  const plain = html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+  for (let i = 1; i <= plain.length; i += 2) { if (my !== typing) return; el.textContent = plain.slice(0, i);
+    $("caption").scrollTop = 1e6; await new Promise(r => setTimeout(r, chars * SPEED)); }
+  el.innerHTML = html; $("caption").scrollTop = 1e6;
+}
+function chips(list) { $("chips").innerHTML = list.map(q => `<span>${esc(q)}</span>`).join(""); }
+function chipOn(k) { [...$("chips").children].forEach((c, i) => c.classList.toggle("on", i === k)); }
+
+const panel = $("panel"), body = $("panel-body");
+let selected = [], cited = new Set(), answered = false;
+function openSel(j) { const h = selected[j];
+  body.innerHTML = `<h4>[${h.rank}] ${esc(h.label)}</h4><div class="meta">${esc(h.area)}</div>` +
+    `<span class="tag">picked as passage ${h.rank}</span>` + (answered ? (cited.has(h.rank)
+      ? `<span class="tag cited">cited in the answer</span>` : `<span class="tag">not cited</span>`) : "") + `<p>${esc(h.snippet)}</p>`;
+  panel.classList.add("open"); }
+function openDot(i) { const j = selected.findIndex(h => h.i === i); if (j >= 0) return openSel(j);
+  body.innerHTML = `<h4>${esc(D.labels[i])}</h4><div class="meta">${esc(D.areas[D.a[i]] || "Other")}</div>` +
+    `<p>This chunk was not picked for your question. Chunks near the yellow Q talk about similar things.</p>`;
+  panel.classList.add("open"); }
+$("close").onclick = () => panel.classList.remove("open");
+document.addEventListener("keydown", e => { if (e.key === "Escape") panel.classList.remove("open"); });
+
+let THREE, OrbitControls;
+try {
+  THREE = await import("three");
+  ({OrbitControls} = await import("three/addons/controls/OrbitControls.js"));
+} catch (e) { $("fallback").style.display = "grid"; throw e; }
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = i => V3(D.x[i], D.y[i], D.z[i]);
+const clamp01 = v => Math.min(1, Math.max(0, v));
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+
+// -- scene ------------------------------------------------------------------------------------
+const stage = $("stage"), wrap = $("wrap");
+const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x070b18, 0.004);
+const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 2000);
+camera.position.set(140, 80, 190);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 4; controls.maxDistance = 600; controls.autoRotateSpeed = 0.6;
+const floor = new THREE.PolarGridHelper(80, 12, 6, 64, 0x26304d, 0x1a2340);
+floor.position.y = -58; scene.add(floor);
+
+function tex(draw, size = 128) { const c = document.createElement("canvas"); c.width = c.height = size;
+  draw(c.getContext("2d"), size / 2, size); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const dotTex = tex((g, r, s) => { const grad = g.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(.4, "rgba(255,255,255,.8)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, s, s); });
+const ringTex = tex((g, r, s) => { g.beginPath(); g.arc(r, r, r * .9, 0, Math.PI * 2); g.lineWidth = s * .04;
+  g.strokeStyle = "#fff"; g.shadowColor = "#fff"; g.shadowBlur = 12; g.stroke(); });
+const badgeTex = (fill, ring, label) => tex((g, r, s) => { g.beginPath(); g.arc(r, r, r * .78, 0, Math.PI * 2);
+  g.fillStyle = fill; g.fill(); g.lineWidth = s * .08; g.strokeStyle = ring; g.stroke(); g.fillStyle = "#070b18";
+  g.font = `800 ${s * .48}px Inter, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(label, r, r + s * .03); });
+
+// one point cloud per department, so the legend can hide them
+const byArea = new Map();
+D.x.forEach((_, i) => { const a = D.a[i]; if (!byArea.has(a)) byArea.set(a, []); byArea.get(a).push(i); });
+for (const [a, idx] of byArea) {
+  const pos = new Float32Array(idx.length * 3);
+  idx.forEach((i, k) => { pos[k * 3] = D.x[i]; pos[k * 3 + 1] = D.y[i]; pos[k * 3 + 2] = D.z[i]; });
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({size: 2, map: dotTex, color: D.colors[a], transparent: true,
+    opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending}));
+  pts.userData = {idx}; clouds[a] = pts; scene.add(pts);
+}
+let cloudTarget = .55, cloudOpacity = 0;
+
+// dynamic points: highlighted chunks and flying particles
+function dynPoints(cap, size) { const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(cap * 3), 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(cap * 3), 3)); geo.setDrawRange(0, 0);
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({size, map: dotTex, vertexColors: true, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending})); pts.renderOrder = 5; scene.add(pts); return pts; }
+const glow = dynPoints(400, 5.5), sparks = dynPoints(800, 3.2);
+const glowList = [];  // {i, color, born}
+const sparkList = []; // {from, to, t0, dur, color, arc}
+function addGlow(i, color) { if (glowList.find(g => g.i === i)) return; glowList.push({i, color: new THREE.Color(color), born: performance.now()}); }
+function fire(from, to, color, dur = 750, delay = 0) {
+  return new Promise(res => sparkList.push({from: from.clone(), to: to.clone(), color: new THREE.Color(color),
+    t0: performance.now() + delay * SPEED, dur: dur * SPEED, arc: 6 + Math.random() * 10, res}));
+}
+
+// question marker, halo and shockwaves
+let Q = V3(0, 0, 0), qFrom = null, qMove = null;
+const qSprite = new THREE.Sprite(new THREE.SpriteMaterial({map: badgeTex("#fbbf24", "#ffffff", "Q"), depthTest: false,
+  sizeAttenuation: false, transparent: true})); qSprite.renderOrder = 10; qSprite.visible = false; scene.add(qSprite);
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({map: dotTex, color: 0xfbbf24, transparent: true, depthWrite: false,
+  blending: THREE.AdditiveBlending, sizeAttenuation: false})); halo.visible = false; scene.add(halo);
+const waves = [];
+function wave(color = "#22d3ee") { const s = new THREE.Sprite(new THREE.SpriteMaterial({map: ringTex, color, transparent: true,
+  depthWrite: false, blending: THREE.AdditiveBlending})); s.position.copy(Q); scene.add(s); waves.push({s, t0: performance.now()}); }
+
+// picked passages: numbered badges and lines
+const badges = [], lines = [];
+function clearPicked() { badges.forEach(b => scene.remove(b.s)); lines.forEach(l => scene.remove(l.line)); badges.length = lines.length = 0; }
+function addPicked(h, j) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map: badgeTex(h.color, "#070b18", String(h.rank)), depthTest: false,
+    sizeAttenuation: false, transparent: true})); s.position.copy(P(h.i)); s.renderOrder = 9; s.userData = {j}; scene.add(s);
+  badges.push({s, t0: performance.now(), h});
+  const geo = new THREE.BufferGeometry().setFromPoints([Q.clone(), Q.clone()]);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color: h.color, transparent: true, opacity: .85}));
+  scene.add(line); lines.push({line, to: P(h.i), t0: performance.now()});
+}
+
+// -- sizing and camera ------------------------------------------------------------------------
+function resize() { const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(wrap); resize();
+const px = n => n / wrap.clientHeight * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+let fly = null;
+function flyTo(target, dist, ms = 1300) { const dir = camera.position.clone().sub(controls.target).normalize();
+  fly = {t0: performance.now(), ms, fromT: controls.target.clone(), toT: target.clone(), fromP: camera.position.clone(),
+         toP: target.clone().add(dir.multiplyScalar(dist))}; }
+function frameOn(points, ms) { const box = new THREE.Box3().setFromPoints(points);
+  flyTo(box.getCenter(V3()), Math.max(30, box.getSize(V3()).length() * 1.3), ms); }
+let focusPts = null;
+$("focus").onclick = () => frameOn(focusPts || [Q], 900);
+$("all").onclick = () => flyTo(V3(0, 0, 0), 230, 900);
+const dolly = f => { const d = camera.position.distanceTo(controls.target);
+  flyTo(controls.target, THREE.MathUtils.clamp(d * f, controls.minDistance, controls.maxDistance), 350); };
+$("zin").onclick = () => dolly(1 / 1.6); $("zout").onclick = () => dolly(1.6);
+let userTookOver = false;
+function setSpin(on) { controls.autoRotate = on; $("spin").title = on ? "Stop rotating" : "Rotate";
+  $("spin-icon").setAttribute("d", on ? "M9 6v12M15 6v12" : "M8 5l11 7-11 7z"); }
+$("spin").onclick = () => setSpin(!controls.autoRotate);
+controls.addEventListener("start", () => { fly = null; userTookOver = true; setSpin(false); });
+const camGo = (fn) => { if (!userTookOver) fn(); };  // never yank the camera away from a user who is exploring
+
+// -- hover and click --------------------------------------------------------------------------
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), tip = $("tip");
+let down = null;
+function pick(e) { const r = renderer.domElement.getBoundingClientRect();
+  mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, camera);
+  const b = ray.intersectObjects(badges.map(b => b.s))[0]; if (b) return {sel: b.object.userData.j};
+  ray.params.Points.threshold = camera.position.distanceTo(controls.target) * 0.012;
+  const p = ray.intersectObjects(clouds.filter(c => c && c.visible))[0]; return p ? {dot: p.object.userData.idx[p.index]} : null; }
+stage.addEventListener("pointermove", e => {
+  if (down) { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true; tip.style.opacity = 0; return; }
+  const h = pick(e); stage.classList.toggle("pointing", !!h); if (!h) { tip.style.opacity = 0; return; }
+  const label = h.sel !== undefined ? `[${selected[h.sel].rank}] ${selected[h.sel].label}` : D.labels[h.dot];
+  const area = h.sel !== undefined ? selected[h.sel].area : (D.areas[D.a[h.dot]] || "Other");
+  const box = wrap.getBoundingClientRect(); tip.innerHTML = `${esc(label)}<small>${esc(area)} · click for details</small>`;
+  tip.style.left = Math.min(e.clientX - box.left + 14, box.width - 290) + "px"; tip.style.top = (e.clientY - box.top + 14) + "px";
+  tip.style.opacity = 1; });
+stage.addEventListener("pointerdown", e => { down = {x: e.clientX, y: e.clientY, moved: false}; stage.classList.add("dragging"); });
+stage.addEventListener("pointerup", e => { stage.classList.remove("dragging"); const click = down && !down.moved; down = null;
+  if (!click) return; const p = pick(e); if (p) p.sel !== undefined ? openSel(p.sel) : openDot(p.dot); });
+stage.addEventListener("pointerleave", () => { tip.style.opacity = 0; });
+
+// full screen
+$("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen()
+  : document.documentElement.requestFullscreen().catch(() => {});
+document.addEventListener("fullscreenchange", () => { const on = !!document.fullscreenElement;
+  $("fs").title = on ? "Exit full screen" : "Full screen";
+  $("fs-icon").setAttribute("d", on ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"); });
+
+// -- the story: one handler per pipeline event -------------------------------------------------
+let mode = null;  // "reading" while the model writes
+const H = {
+  async start(ev) {
+    setStep("Question"); Q = V3(...ev.q); qSprite.position.copy(Q); halo.position.copy(Q);
+    qSprite.visible = halo.visible = true; qSprite.userData.t0 = performance.now();
+    await say(`<b>${esc(ev.question)}</b>`, {type: true, chars: 18});
+    say(`<b>${esc(ev.question)}</b><br><span style="color:#8b97b5">Understanding the question…</span>`);
+    camGo(() => flyTo(Q, 120, 1600)); await sleep(300);
+  },
+  async condense(ev) {
+    if (!ev.rewritten) return;
+    setStep("Question");
+    await say(`Using our chat, I rewrote your follow-up as: <b>${esc(ev.standalone)}</b>`, {type: true});
+    qFrom = Q.clone(); qMove = {to: V3(...ev.q), t0: performance.now()}; await sleep(900);
+  },
+  async expand(ev) {
+    setStep("Rewording"); say("Policies rarely use your exact words, so I search with several versions of the question.");
+    $("chips").innerHTML = ""; for (const q of ev.queries) { $("chips").insertAdjacentHTML("beforeend", `<span>${esc(q)}</span>`); await sleep(300); }
+    await sleep(200);
+  },
+  async tool(ev) {
+    setStep("Searching"); wave("#fbbf24");
+    await say(`The agent calls <b>${esc(ev.name)}</b>(${esc(ev.args)})<br><span style="color:#8b97b5">${esc(ev.result)}</span>`);
+    await sleep(900);
+  },
+  async retrieve(ev) {
+    setStep("Searching");
+    const all = new Set(); ev.searches.forEach(s => [...s.semantic, ...s.keyword, ...s.sku].forEach(i => all.add(i)));
+    ev.selected.forEach(h => all.add(h.i));
+    focusPts = [Q, ...[...all].map(P)]; camGo(() => frameOn(focusPts, 1400));
+    if (!$("chips").children.length && ev.searches.length) chips(ev.searches.map(s => s.query));
+    cloudTarget = .35;
+    for (let k = 0; k < ev.searches.length; k++) {
+      const s = ev.searches[k]; chipOn(k);
+      say(`Searching <b>“${esc(s.query)}”</b> by <span style="color:${SEM}">meaning</span> and by <span style="color:${KEY}">keywords</span>…`);
+      wave(SEM); setTimeout(() => wave(KEY), 220 * SPEED);
+      const shots = [...s.semantic.map(i => [i, SEM]), ...s.keyword.map(i => [i, KEY]), ...s.sku.map(i => [i, "#fbbf24"])];
+      shots.forEach(([i, c], n) => fire(Q, P(i), c, 650, n * 45).then(() => addGlow(i, c)));
+      await sleep(Math.max(800, shots.length * 45 + 600));
+    }
+    chipOn(-1);
+    setStep("Fusion");
+    await say(`Found <b>${all.size}</b> different chunks. Each search votes for its results (rank fusion); ` +
+      `chunks found by several searches win, with at most 3 per document.`);
+    await sleep(600);
+    selected = ev.selected; clearPicked();
+    for (let j = 0; j < selected.length; j++) { addPicked(selected[j], j); await sleep(120); }
+    cloudTarget = .22;
+    await say(`Picked the <b>${selected.length}</b> best passages.` + (ev.excluded_outdated ? " The outdated 2021 catalog was left out." : ""));
+    await sleep(500);
+  },
+  async generate(ev) {
+    setStep("Writing"); mode = "reading";
+    await say(`Reading the ${ev.n} numbered passages and writing an answer that cites them…`, {type: true});
+  },
+  async answer(ev) {
+    mode = null; answered = true; cited = new Set(ev.cited); setStep("Answer");
+    badges.forEach(b => { if (cited.has(b.h.rank)) { b.s.material.map = badgeTex("#34d399", "#ffffff", String(b.h.rank));
+      b.s.material.needsUpdate = true; b.cited = performance.now(); } else b.s.material.opacity = .45; });
+    lines.forEach((l, j) => { const c = cited.has(selected[j]?.rank); l.line.material.color.set(c ? "#34d399" : "#334155");
+      l.line.material.opacity = c ? 1 : .35; });
+    const citedPts = selected.filter(h => cited.has(h.rank)).map(h => P(h.i));
+    if (citedPts.length) camGo(() => frameOn([Q, ...citedPts], 1400));
+    const conf = {high: ["High confidence", "#34d399"], medium: ["Medium confidence", "#fbbf24"], low: ["Low confidence", "#f87171"]}[ev.confidence];
+    if (conf) { const c = $("cap-conf"); c.textContent = conf[0]; c.style.display = "inline-block"; c.style.color = conf[1];
+      c.style.border = `1px solid ${conf[1]}`; }
+    $("chips").innerHTML = "";
+    const html = esc(ev.text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>')
+      .replace(/\n/g, "<br>") + (ev.warnings || []).map(w => `<span class="warn">${esc(w)}</span>`).join("");
+    await say(html, {type: true, chars: 12});
+  },
+  async done(ev) {
+    mode = null; $("pulse").classList.add("off");
+    if (ev.error) { setStep("Answer"); say(`<span class="warn">${esc(ev.error)}</span>`); }
+    if (!userTookOver) setTimeout(() => { if (!userTookOver) setSpin(true); }, 2500);
+  },
+};
+
+const queue = []; let playing = false, finished = false;
+async function play() { if (playing) return; playing = true;
+  while (queue.length) { const ev = queue.shift(); try { await (H[ev.type] || (async () => {}))(ev); } catch (e) { console.error(e); } }
+  playing = false; }
+let seen = 0;
+function take(events) { if (events.length > seen) { queue.push(...events.slice(seen)); seen = events.length;
+  if (events[events.length - 1].type === "done") finished = true; play(); } }
+if (D.events) take(D.events);
+if (D.poll) { let fails = 0;
+  const poll = async () => { if (finished) return;
+    try { const r = await fetch(`${D.poll}?t=${Date.now()}`, {cache: "no-store"}); if (!r.ok) throw new Error(r.status);
+      take((await r.json()).events); fails = 0; }
+    catch (e) { if (++fails === 20) say("Live updates are not reaching the map. The answer will still appear below."); }
+    setTimeout(poll, 250); };
+  poll(); }
+
+// -- render loop --------------------------------------------------------------------------------
+const c3 = new THREE.Color();
+function frame(now) {
+  cloudOpacity += (cloudTarget - cloudOpacity) * .05; clouds.forEach(c => c && (c.material.opacity = cloudOpacity));
+  if (qSprite.visible) { const p = clamp01((now - qSprite.userData.t0) / 700);
+    qSprite.scale.setScalar(px(26) * (p < 1 ? ease(p) * 1.2 - .2 * p : 1 + .1 * Math.sin(now / 260)));
+    const h = (now / 1700) % 1; halo.scale.setScalar(px(60 + 50 * h)); halo.material.opacity = .55 * (1 - h); }
+  if (qMove) { const p = ease(clamp01((now - qMove.t0) / (900 * SPEED))); Q.lerpVectors(qFrom, qMove.to, p);
+    qSprite.position.copy(Q); halo.position.copy(Q); if (p >= 1) qMove = null; }
+  for (let k = waves.length - 1; k >= 0; k--) { const w = waves[k], p = (now - w.t0) / (1100 * SPEED);
+    if (p >= 1) { scene.remove(w.s); waves.splice(k, 1); continue; }
+    w.s.scale.setScalar(4 + 70 * ease(p)); w.s.material.opacity = .8 * (1 - p); }
+  // reading: sparks travel from the picked passages back to the question
+  if (mode === "reading" && badges.length && Math.random() < .35) { const b = badges[Math.floor(Math.random() * badges.length)];
+    sparkList.push({from: b.s.position.clone(), to: Q.clone(), color: new THREE.Color(b.h.color), t0: now, dur: 900, arc: 4 + Math.random() * 6}); }
+  // sparks
+  const sp = sparks.geometry.attributes.position, sc = sparks.geometry.attributes.color; let n = 0;
+  for (let k = sparkList.length - 1; k >= 0; k--) { const s = sparkList[k], p = (now - s.t0) / s.dur;
+    if (p < 0) continue; if (p >= 1) { sparkList.splice(k, 1); s.res && s.res(); continue; }
+    if (n >= 800) continue; const e = ease(p); const v = s.from.clone().lerp(s.to, e); v.y += Math.sin(p * Math.PI) * s.arc;
+    sp.setXYZ(n, v.x, v.y, v.z); sc.setXYZ(n, s.color.r, s.color.g, s.color.b); n++; }
+  sparks.geometry.setDrawRange(0, n); sp.needsUpdate = sc.needsUpdate = true;
+  // glowing found chunks
+  const gp = glow.geometry.attributes.position, gc = glow.geometry.attributes.color; let m = 0;
+  for (const g of glowList) { if (m >= 400) break; const p = clamp01((now - g.born) / 400);
+    const dim = selected.length && !selected.find(h => h.i === g.i) ? .35 : 1;
+    c3.copy(g.color).multiplyScalar((p < 1 ? 1.6 - .6 * p : 1) * dim);
+    gp.setXYZ(m, D.x[g.i], D.y[g.i], D.z[g.i]); gc.setXYZ(m, c3.r, c3.g, c3.b); m++; }
+  glow.geometry.setDrawRange(0, m); gp.needsUpdate = gc.needsUpdate = true;
+  // badges pop, lines grow, cited badges pulse
+  badges.forEach(b => { const p = clamp01((now - b.t0) / (400 * SPEED));
+    const pulse = b.cited ? 1 + .15 * Math.sin((now - b.cited) / 180) : 1;
+    b.s.scale.setScalar(px(20) * (p < 1 ? p * (1.3 - .3 * p) : 1) * pulse); });
+  lines.forEach(l => { const p = ease(clamp01((now - l.t0) / (500 * SPEED))); const end = Q.clone().lerp(l.to, p);
+    const a = l.line.geometry.attributes.position; a.setXYZ(0, Q.x, Q.y, Q.z); a.setXYZ(1, end.x, end.y, end.z); a.needsUpdate = true; });
+  if (fly) { const p = Math.min(1, (now - fly.t0) / (fly.ms * SPEED)), e = ease(p);
+    controls.target.lerpVectors(fly.fromT, fly.toT, e); camera.position.lerpVectors(fly.fromP, fly.toP, e); if (p >= 1) fly = null; }
+  controls.update(); renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

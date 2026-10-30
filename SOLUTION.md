@@ -110,26 +110,49 @@ ingestion step.
 - **Evaluation set** of 20 cases including every trap (`python -m ironstore_assistant.evaluate`).
 - **Department filter** and **include outdated** switch in the UI.
 - **Show my work**: an animated, step-by-step view of every answer (see below).
-- **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter, clickable source cards and a glowing knowledge map.
+- **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter and clickable source cards.
+- **Live 3D map** (`live_view.py` + `assets/live_map.html`): watch the search happen in real time (see below).
 - **Offline mode** (TF-IDF embeddings) and **25 offline tests** with a fake LLM.
 
 ## Show my work
 
-With *Animate how I find the answer* on (sidebar), each answer is built live in front of you:
+With *Animate how I find the answer* on (sidebar), there are two views.
 
-1. **Understanding**: a follow-up is rewritten into a standalone question (strikethrough → new question).
-2. **Rewording**: the multi-query versions pop in one by one.
-3. **Searching**: top hits from meaning (FAISS) and keywords (TF-IDF) side by side, with animated score bars.
-4. **Rank fusion**: the leaderboard of merged results; chunks skipped for variety are greyed out.
-5. **Knowledge map**: every chunk is a dot (PCA of its embedding). The question (a yellow Q) drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**. After the animation the map is **interactive**: scroll or use the buttons to zoom, drag to move, hover any dot to see its document and page, click a numbered passage to read it, click a department in the legend to hide it, and press the full-screen button.
-6. **Passages**: the numbered cards the model reads, each tagged with the search that found it.
-7. **Citations checked**: which passages were actually cited, then the answer types itself out.
+### Live 3D map (default)
 
-![Show my work](docs/images/show_my_work.png)
+Every chunk of the 83 documents is a glowing dot in 3D (PCA of its embedding, drawn with WebGL / three.js),
+and the answer is built on the map **while it happens**:
 
-![Knowledge map in full screen](docs/images/map_fullscreen.png)
+1. **Question**: the yellow Q lands where your question sits among the documents.
+2. **Rewording**: the multi-query versions appear as chips in the caption bar.
+3. **Searching**: for each version, a shockwave leaves the Q and dots shoot out to every chunk found by
+   *meaning* (FAISS, cyan) and by *keywords* (TF-IDF, violet).
+4. **Fusion**: rank fusion picks the passages; the 8 winners get numbered badges and lines from the Q.
+5. **Writing**: sparks flow from the passages back to the Q while the model reads them.
+6. **Answer**: the cited passages turn green and pulse, and the answer is typed out in the caption bar
+   at the bottom, with its confidence.
 
-*Screenshot from a local run with offline embeddings and a scripted answer; the retrieval steps are real.*
+How it streams: `LiveMap` (`live_view.py`) is the `on_step` callback. It writes each step to a small JSON
+file under `static/live/`, which Streamlit serves (`enableStaticServing`), and the map polls it four times a
+second. The text answer below the map waits until the map reaches the answer, so it doesn't spoil the ending.
+
+You can explore at any time: drag to rotate, right-drag to move, scroll to zoom, hover any dot for its
+document and page, click a numbered passage to read it, click a department in the legend to hide it, and
+press the full-screen button (top right).
+
+![Live map while searching](docs/images/live_searching.png)
+
+![Live map with the answer](docs/images/live_answer.png)
+
+![Live map in full screen](docs/images/map_fullscreen.png)
+
+### Step by step
+
+The same pipeline as panels: the question rewrite, the query versions, the meaning and keyword hits with
+animated score bars, the rank-fusion leaderboard, the 3D map replaying the search, the numbered passages,
+and the citation check.
+
+*Screenshots from a local run with offline embeddings and a scripted answer; the retrieval steps are real.*
 
 ## Evaluation
 

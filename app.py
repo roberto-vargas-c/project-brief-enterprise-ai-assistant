@@ -26,6 +26,7 @@ except Exception:  # no secrets file when running locally: .env is used instead
 from ironstore_assistant import config  # noqa: E402
 from ironstore_assistant.agent import AgentAssistant  # noqa: E402
 from ironstore_assistant.rag import build_assistant  # noqa: E402
+from live_view import LiveMap  # noqa: E402
 from pipeline_view import PipelineView, passage_cards, typewriter  # noqa: E402
 import ui  # noqa: E402
 
@@ -75,10 +76,14 @@ with st.sidebar:
     area = st.selectbox("Department", areas)
     st.subheader("Show my work")
     show_work = st.toggle("Animate how I find the answer", value=True)
+    view_mode = st.radio("View", ["Live 3D map", "Step by step"], disabled=not show_work,
+                         help="Live 3D map: watch the search happen on a 3D map of every chunk, with the "
+                              "answer typed at the bottom. Step by step: each stage as a panel.")
     speed_label = st.select_slider("Animation speed", ["Fast", "Normal", "Slow"], value="Normal",
                                    disabled=not show_work)
-    show_map = st.toggle("Knowledge map", value=True, disabled=not show_work,
-                         help="Plot every chunk on a 2D map and show where your question lands.")
+    show_map = st.toggle("Knowledge map in step-by-step view", value=True,
+                         disabled=not show_work or view_mode != "Step by step",
+                         help="Plot every chunk on a 3D map and show where your question lands.")
     st.write("")
     if st.button("New conversation", icon=":material/add_comment:", use_container_width=True):
         st.session_state.messages = []
@@ -142,7 +147,17 @@ if question:
     with st.chat_message("assistant", avatar=AVATARS["assistant"]):
         kwargs = {"history": history, "include_outdated": True if include_old else None,
                   "area": None if area == "All" else area}
-        if show_work:
+        if show_work and view_mode == "Live 3D map":
+            live = LiveMap(rag.retriever, question, speed=speed)
+            try:
+                resp = bot.ask(question, on_step=live, **kwargs)
+            except Exception as e:
+                live.finish(error="Something went wrong while answering. Please try again.")
+                raise e
+            live.finish(resp)
+            live.wait_for_animation()
+            st.markdown(resp.answer)
+        elif show_work:
             view = PipelineView(rag.retriever, speed=speed, show_map=show_map)
             resp = bot.ask(question, on_step=view, **kwargs)
             st.write_stream(typewriter(resp.answer, speed))
