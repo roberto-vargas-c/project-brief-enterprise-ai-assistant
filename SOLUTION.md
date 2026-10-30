@@ -121,11 +121,13 @@ With *Animate how I find the answer* on (sidebar), each answer is built live in 
 2. **Rewording**: the multi-query versions pop in one by one.
 3. **Searching**: top hits from meaning (FAISS) and keywords (TF-IDF) side by side, with animated score bars.
 4. **Rank fusion**: the leaderboard of merged results; chunks skipped for variety are greyed out.
-5. **Knowledge map**: every chunk is a dot (PCA of its embedding). The question (a yellow Q) drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**.
+5. **Knowledge map**: every chunk is a dot (PCA of its embedding). The question (a yellow Q) drops onto the map, it zooms in, and lines shoot out to the picked passages. When the answer is ready the map replays with the **cited passages in green**. After the animation the map is **interactive**: scroll or use the buttons to zoom, drag to move, hover any dot to see its document and page, click a numbered passage to read it, click a department in the legend to hide it, and press the full-screen button.
 6. **Passages**: the numbered cards the model reads, each tagged with the search that found it.
 7. **Citations checked**: which passages were actually cited, then the answer types itself out.
 
 ![Show my work](docs/images/show_my_work.png)
+
+![Knowledge map in full screen](docs/images/map_fullscreen.png)
 
 *Screenshot from a local run with offline embeddings and a scripted answer; the retrieval steps are real.*
 
