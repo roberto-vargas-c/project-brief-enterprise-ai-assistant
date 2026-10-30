@@ -1,17 +1,51 @@
 """Streamlit chat interface for the IronStore Assistant.
 
     streamlit run app.py
+
+On Streamlit Community Cloud, put OPENAI_API_KEY (and optionally APP_PASSWORD) in the app's
+Secrets. The index is built automatically on the first visit.
 """
 
+import hmac
 import json
+import os
 
 import streamlit as st
 
-from ironstore_assistant import config
-from ironstore_assistant.agent import AgentAssistant
-from ironstore_assistant.rag import build_assistant
-
 st.set_page_config(page_title="IronStore Assistant", page_icon="🤖", layout="wide")
+
+# Streamlit secrets -> environment variables, before the config module reads them
+try:
+    for key, value in st.secrets.items():
+        if isinstance(value, str):
+            os.environ.setdefault(key, value)
+except Exception:  # no secrets file when running locally: .env is used instead
+    pass
+
+from ironstore_assistant import config  # noqa: E402
+from ironstore_assistant.agent import AgentAssistant  # noqa: E402
+from ironstore_assistant.rag import build_assistant  # noqa: E402
+
+
+def check_password() -> None:
+    """Simple shared password, so a public deployment doesn't spend your OpenAI credits for strangers."""
+    expected = os.getenv("APP_PASSWORD")
+    if not expected or st.session_state.get("authenticated"):
+        return
+    st.title("🤖 IronStore Assistant")
+    pwd = st.text_input("Password", type="password")
+    if pwd and hmac.compare_digest(pwd, expected):
+        st.session_state.authenticated = True
+        st.rerun()
+    elif pwd:
+        st.error("Wrong password.")
+    st.stop()
+
+
+check_password()
+if not os.getenv("OPENAI_API_KEY"):
+    st.error("OPENAI_API_KEY is not set. Add it to `.env` locally, or to the app's **Secrets** on Streamlit Cloud.")
+    st.stop()
 
 CONFIDENCE_BADGE = {"high": "🟢 High confidence", "medium": "🟡 Medium confidence", "low": "🔴 Low confidence"}
 EXAMPLES = [
@@ -22,7 +56,7 @@ EXAMPLES = [
 ]
 
 
-@st.cache_resource(show_spinner="Loading the knowledge base…")
+@st.cache_resource(show_spinner="Loading the knowledge base (the first visit builds the index, about 1-2 minutes)…")
 def get_assistant(multi_query: bool):
     return build_assistant(multi_query=multi_query)
 

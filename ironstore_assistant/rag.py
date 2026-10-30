@@ -230,6 +230,8 @@ def get_llm(model: str | None = None) -> BaseChatModel:
 
 
 def build_assistant(multi_query: bool = True, llm: BaseChatModel | None = None) -> Assistant:
+    from .build_index import ensure_index
     from .index import load_index
 
+    ensure_index()
     return Assistant(load_index(), llm or get_llm(), load_products(), multi_query=multi_query)

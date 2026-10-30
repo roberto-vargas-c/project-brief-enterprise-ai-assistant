@@ -1,9 +1,8 @@
 from langchain_core.messages import AIMessage
 
 from ironstore_assistant.agent import AgentAssistant
+from ironstore_assistant.fake_llm import FakeLLM
 from ironstore_assistant.rag import Assistant, Retriever, StructuredAnswer, format_context
-
-from .conftest import FakeLLM
 
 
 def test_retrieval_finds_the_right_policy(store):
