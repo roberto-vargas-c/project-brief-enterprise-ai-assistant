@@ -41,7 +41,6 @@ LLM call is needed, a scripted `FakeLLM` stands in until you add `OPENAI_API_KEY
 3. Under **Advanced settings → Secrets**, paste (see `.streamlit/secrets.toml.example`):
    ```toml
    OPENAI_API_KEY = "sk-..."
-   APP_PASSWORD = "choose-a-password"   # optional, keeps strangers from using your credits
    ```
 4. Click **Deploy**. The first visit builds the index (about 1-2 minutes, a few cents of embeddings); later visits are instant until the app restarts.
 
