@@ -43,3 +43,11 @@ CHUNK_OVERLAP = int(os.getenv("IRONSTORE_CHUNK_OVERLAP", "150"))
 # Retrieval
 TOP_K = int(os.getenv("IRONSTORE_TOP_K", "8"))
 FETCH_K = int(os.getenv("IRONSTORE_FETCH_K", "25"))
+
+# Evaluation (python -m ironstore_assistant.evaluate)
+# LLM-as-judge model. Prefer a different (ideally stronger) model than CHAT_MODEL: models tend to
+# grade their own answers too kindly.
+JUDGE_MODEL = os.getenv("IRONSTORE_JUDGE_MODEL", CHAT_MODEL)
+# Optional prices in EUR or USD per million tokens, to turn token counts into a cost estimate.
+PRICE_INPUT_PER_M = float(os.getenv("IRONSTORE_PRICE_INPUT_PER_M", "0") or 0)
+PRICE_OUTPUT_PER_M = float(os.getenv("IRONSTORE_PRICE_OUTPUT_PER_M", "0") or 0)
