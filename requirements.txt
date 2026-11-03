@@ -9,7 +9,7 @@ pypdf>=5.0                  # [6.17.0]
 pandas>=2.2
 scikit-learn>=1.5           # offline TF-IDF embeddings
 python-dotenv>=1.0
-streamlit>=1.40             # [1.66.1]
+streamlit==1.66.1           # pinned: a version change on redeploy breaks open tabs ("Failed to fetch dynamically imported module")
 pytest>=8
 rouge-score>=0.1.2          # [0.1.2]  ROUGE (and nltk for BLEU) in the evaluation
 
