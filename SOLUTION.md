@@ -35,6 +35,7 @@ LLM call is needed, a scripted `FakeLLM` stands in until you add `OPENAI_API_KEY
 | [04 Memory and multi-query](notebooks/04_memory_and_multi_query.ipynb) | Condensing follow-ups, window memory, multi-query and rank fusion | Conversation history, LangChain memory, multi-query |
 | [05 Agents and tools](notebooks/05_agents_and_tools.ipynb) | `@tool`, tool schemas, the tool-calling loop, RAG vs agent | Tool calling, LangChain agents, building tools |
 | [06 Evaluation and safety](notebooks/06_evaluation_and_safety.ipynb) | Direct and indirect prompt injection, the evaluation set, retrieval metrics | Prompt injections, model evaluation |
+| [07 Evaluation with metrics and judges](notebooks/07_evaluation_metrics_and_judges.ipynb) | BLEU, ROUGE and similarity vs reference answers, four LLM-as-judge graders, RAG vs agent, Giskard test sets | O_Evaluation 0–4 |
 
 ## Deploy (Streamlit Community Cloud, free)
 
@@ -107,12 +108,12 @@ ingestion step.
 - **Citation validation**: citations to passages that weren't retrieved are dropped; an answer without valid citations is downgraded to low confidence.
 - **Prompt-injection guard** in the system prompt and tests.
 - **Data-quality report** (`python -m ironstore_assistant.ingest`).
-- **Evaluation set** of 20 cases including every trap (`python -m ironstore_assistant.evaluate`).
+- **Evaluation harness** (O_Evaluation): 56 hand-written cases with reference answers and every trap, code checks, BLEU/ROUGE/similarity, four LLM-as-judge graders, a RAG vs agent report with latency and tokens, and Giskard test-set generation (`python -m ironstore_assistant.evaluate --mode both`).
 - **Department filter** and **include outdated** switch in the UI.
 - **Show my work**: an animated, step-by-step view of every answer (see below).
 - **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter and clickable source cards.
 - **Live 3D map** (`live_view.py` + `assets/live_map.html`): watch the search happen in real time (see below).
-- **Offline mode** (TF-IDF embeddings) and **25 offline tests** with a fake LLM.
+- **Offline mode** (TF-IDF embeddings) and **38 offline tests** with a fake LLM.
 
 ## Show my work
 
@@ -161,20 +162,54 @@ and the citation check.
 
 ## Evaluation
 
+The evaluation follows the course's O_Evaluation module. Every answer is scored with each family of evals:
+
+| Family | What is measured | Code |
+|---|---|---|
+| Code-based checks | correct `answerable` flag, expected documents cited, key facts present, no leaked prompt, outdated warning | `evaluate.py` |
+| Reference-based | BLEU, ROUGE-1/2/L and embedding similarity against a reference answer, plus an LLM judge for **correctness** | `metrics.py`, `judges.py` |
+| LLM-as-judge (no reference) | **groundedness** (hallucination), **document relevance**, **answer relevance** | `judges.py` |
+| Safety | outdated catalog, shared ID, reused SKU, conflicting documents, out-of-scope questions, prompt injections | `eval_cases.py` |
+| Performance and cost | seconds and tokens per answer; cost when `IRONSTORE_PRICE_*_PER_M` is set | `evaluate.py` |
+
+**In the app:** open the **Evaluation** page in the sidebar. It uses the app's own `OPENAI_API_KEY` (the
+Streamlit secret on the deployed app), lets you pick RAG, agent or both, the categories and how many questions
+(mixed across categories, 10 by default), shows the summary, every failure with the judges' reasons, all answers,
+and offers the report as a Markdown download. A free retrieval-only check is one click.
+
+**From the command line:**
+
 ```bash
-python -m ironstore_assistant.evaluate --retrieval-only   # retriever only, no LLM calls
-python -m ironstore_assistant.evaluate                    # full answers, RAG mode
-python -m ironstore_assistant.evaluate --agent            # full answers, agent mode
+python -m ironstore_assistant.evaluate --retrieval-only          # retriever only, no LLM calls
+python -m ironstore_assistant.evaluate                           # full answers, RAG mode
+python -m ironstore_assistant.evaluate --mode both --out docs/eval_report.md   # RAG vs agent report
+python -m ironstore_assistant.evaluate --no-judges --limit 10    # quick, cheap smoke run
 ```
 
-The full run checks, per case: correct `answerable` flag, expected documents cited, key facts in the
-answer, no leaked system prompt, and an outdated warning when the 2021 catalog is used.
+The test set has **56 hand-written cases** (`ironstore_assistant/eval_cases.py`), each with a reference answer
+written from the documents: one or two facts per policy, products, employee paraphrases, multi-part questions,
+three cases where **two documents disagree** (dormant accounts 30 vs 45 days, refund approval limits, SpendHub vs
+SpendFlow), and every trap from the data. The judges use `IRONSTORE_JUDGE_MODEL` (preferably a different, stronger
+model than the one being judged) and give a reason for each verdict; the report lists the reasons for every failure.
+With `LANGSMITH_API_KEY` set, all calls are also traced to LangSmith.
 
-With the **offline TF-IDF** embeddings plus keyword search, the retriever gets **100% recall@8** and a
-**93% top-1 hit** on the 15 cases with an expected source (it was 93% / 80% before hybrid search and
-page-spanning chunks) ([`docs/retrieval_eval_tfidf.md`](docs/retrieval_eval_tfidf.md)).
-OpenAI embeddings should do better on paraphrased questions; run the evaluation after building the index
-with your key to get the real numbers.
+**More questions with Giskard** (O_Evaluation/4). In a Python 3.10–3.12 environment:
+
+```bash
+pip install "giskard[llm]>=2.15,<3" "pandas<3" "pyarrow<17" "datasets<3"
+python -m ironstore_assistant.testset generate -n 40   # writes evals/generated_cases.jsonl
+python -m ironstore_assistant.testset report           # Giskard's own report, data/giskard_report.html
+```
+
+Generated questions are saved unreviewed; a person checks each one and sets `"reviewed": true` before the
+evaluation uses it (see [`evals/README.md`](evals/README.md)).
+
+**Current numbers.** With the **offline TF-IDF** embeddings plus keyword search, the retriever finds an expected
+document in the top 8 for **97%** of the 49 cases that have one, ranks it first for **78%**, MRR **0.83**
+([`docs/retrieval_eval_tfidf.md`](docs/retrieval_eval_tfidf.md)). The 15 original cases still score 100% / 93%; the
+new paraphrased and cross-document questions are harder (for example, the 8% discount rule is in the Sales Playbook
+but the Discounts and Promotions Policy ranks higher). The answer-level report needs an OpenAI key: run the
+`--mode both` command above to produce `docs/eval_report.md`.
 
 ## Tests
 
@@ -194,15 +229,21 @@ ironstore_assistant/
   prompts.py       all prompts
   rag.py           Retriever + Assistant (memory, multi-query, structured answer, validation)
   agent.py         tool-calling agent (bonus)
-  evaluate.py      evaluation set and scorer (bonus)
+  eval_cases.py    evaluation set: 56 cases with reference answers
+  evaluate.py      evaluation harness and report (code checks, metrics, judges, RAG vs agent)
+  metrics.py       BLEU, ROUGE, embedding similarity
+  judges.py        LLM-as-judge graders
+  testset.py       Giskard test-set generation and report
   fake_llm.py      scripted stand-in LLM for tests and key-less notebooks
 app.py             Streamlit chat UI
+pages/             extra app pages (Evaluation)
 pipeline_view.py   animated "show my work" view and knowledge map
 cli.py             terminal chat
 tests/             offline tests
+evals/             generated test cases (Giskard), reviewed by hand
 notebooks/         teaching notebooks (course concepts applied here)
 .streamlit/        theme + secrets example for deployment
-docs/              generated data-quality report and retrieval evaluation
+docs/              generated data-quality report and evaluation reports
 ```
 
 ## Limitations and next steps
@@ -211,4 +252,5 @@ docs/              generated data-quality report and retrieval evaluation
 - Catalog page numbers are **PDF pages** (what you see in a PDF viewer), not the catalogs' own "Page N — Section" labels.
 - The catalog parser is heuristic; two Yoga & Pilates products have no availability in the source PDF itself.
 - `langchain-community` is being sunset upstream; the FAISS wrapper can later move to a standalone package.
-- Next: streaming answers in the UI, user feedback buttons feeding the evaluation set, access control per department.
+- The answer-level evaluation has not been run with a real model in this repo yet (it needs a key); LLM judges can also be wrong, so read their reasons.
+- Next: streaming answers in the UI, user feedback buttons feeding the evaluation set, running the evaluation in CI, access control per department.

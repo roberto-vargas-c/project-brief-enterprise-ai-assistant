@@ -11,7 +11,14 @@ scikit-learn>=1.5           # offline TF-IDF embeddings
 python-dotenv>=1.0
 streamlit>=1.40             # [1.66.1]
 pytest>=8
+rouge-score>=0.1.2          # [0.1.2]  ROUGE (and nltk for BLEU) in the evaluation
 
 # Optional: free local embeddings (IRONSTORE_EMBEDDINGS=huggingface)
 # langchain-huggingface
 # sentence-transformers
+
+# Optional: Giskard test-set generation (python -m ironstore_assistant.testset), Python 3.10-3.12 only
+# giskard[llm]>=2.15,<3
+# pandas<3
+# pyarrow<17
+# datasets<3
