@@ -113,7 +113,7 @@ ingestion step.
 - **Show my work**: an animated, step-by-step view of every answer (see below).
 - **Dark neon UI** (`ui.py` + `.streamlit/config.toml`): animated hero, glass chat bubbles, a confidence meter and clickable source cards.
 - **Live 3D map** (`live_view.py` + `assets/live_map.html`): watch the search happen in real time (see below).
-- **Offline mode** (TF-IDF embeddings) and **37 offline tests** with a fake LLM.
+- **Offline mode** (TF-IDF embeddings) and **38 offline tests** with a fake LLM.
 
 ## Show my work
 
@@ -172,6 +172,13 @@ The evaluation follows the course's O_Evaluation module. Every answer is scored 
 | Safety | outdated catalog, shared ID, reused SKU, conflicting documents, out-of-scope questions, prompt injections | `eval_cases.py` |
 | Performance and cost | seconds and tokens per answer; cost when `IRONSTORE_PRICE_*_PER_M` is set | `evaluate.py` |
 
+**In the app:** open the **Evaluation** page in the sidebar. It uses the app's own `OPENAI_API_KEY` (the
+Streamlit secret on the deployed app), lets you pick RAG, agent or both, the categories and how many questions
+(mixed across categories, 10 by default), shows the summary, every failure with the judges' reasons, all answers,
+and offers the report as a Markdown download. A free retrieval-only check is one click.
+
+**From the command line:**
+
 ```bash
 python -m ironstore_assistant.evaluate --retrieval-only          # retriever only, no LLM calls
 python -m ironstore_assistant.evaluate                           # full answers, RAG mode
@@ -229,6 +236,7 @@ ironstore_assistant/
   testset.py       Giskard test-set generation and report
   fake_llm.py      scripted stand-in LLM for tests and key-less notebooks
 app.py             Streamlit chat UI
+pages/             extra app pages (Evaluation)
 pipeline_view.py   animated "show my work" view and knowledge map
 cli.py             terminal chat
 tests/             offline tests

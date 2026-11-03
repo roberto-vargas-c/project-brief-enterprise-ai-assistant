@@ -129,3 +129,13 @@ def test_giskard_testset_is_converted_to_unreviewed_cases():
     assert Case.from_dict(rows[1]).history == [("user", "Tell me about hybrid work")]
     assert rows[2]["expected_sources"] == [] and not rows[2]["answerable"]
     assert rows[2]["category"] == "generated: out of scope"
+
+
+def test_evaluation_page_loads(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")  # the page only calls the model once you click Run
+    at = AppTest.from_file("../pages/1_Evaluation.py", default_timeout=60).run()
+    assert not at.exception
+    assert at.title[0].value == "Evaluation"
+    assert at.slider[0].value == 10 and at.slider[0].max == len(CASES)
